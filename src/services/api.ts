@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = 'https://frontdesk-sigma.vercel.app';
 
 // Types
 export interface User {
@@ -217,6 +217,11 @@ class ApiService {
 
   async updateQueueItem(id: number, queueItem: Partial<CreateQueueRequest>): Promise<QueueItem> {
     const response: AxiosResponse<QueueItem> = await this.api.patch(`/queue/${id}`, queueItem);
+    return response.data;
+  }
+
+  async updateQueueStatus(id: number, status: 'waiting' | 'with-doctor' | 'completed' | 'canceled'): Promise<QueueItem> {
+    const response: AxiosResponse<QueueItem> = await this.api.patch(`/queue/${id}/status`, { status });
     return response.data;
   }
 

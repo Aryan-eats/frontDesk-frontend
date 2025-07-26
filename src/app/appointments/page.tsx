@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useState } from 'react';
 import { LoadingOverlay, LoadingSpinner } from '../../components/LoadingSpinner';
 import ProtectedRoute from '../../components/ProtectedRoute';
-import { apiService, Appointment, Doctor, CreateAppointmentRequest } from '../../services/api';
+import { Appointment, Doctor, CreateAppointmentRequest } from '../../services/api';
+import { useAppointments, useDoctors, appointmentMutations } from '../../hooks/useApi';
 import { validateRequired, validateEmail } from '../../utils/validation';
 import { 
   X, 
@@ -18,10 +18,10 @@ import {
 } from 'lucide-react';
 
 export default function AppointmentsPage() {
-  const { } = useAuth();
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Use SWR hooks for data fetching with shared cache
+  const { data: appointments = [], error: appointmentsError, isLoading: appointmentsLoading, mutate: mutateAppointments } = useAppointments();
+  const { data: doctors = [], error: doctorsError, isLoading: doctorsLoading } = useDoctors();
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -44,47 +44,31 @@ export default function AppointmentsPage() {
   });
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const isLoading = appointmentsLoading || doctorsLoading;
 
-  const loadData = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const [appointmentsData, doctorsData] = await Promise.all([
-        apiService.getAppointments(),
-        apiService.getDoctors()
-      ]);
-      
-      setAppointments(appointmentsData);
-      setDoctors(doctorsData);
-    } catch (err: unknown) {
-      setError('Failed to load data. Please try again.');
-      console.error('Error loading data:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Handle errors from SWR
+  const dataError = appointmentsError || doctorsError;
+  if (dataError && !error) {
+    setError('Failed to load data');
+  }
 
   const validateForm = () => {
     const errors: Record<string, string> = {};
     
     if (!validateRequired(formData.patientName)) {
-      errors.patientName = 'Patient name is required';
+      errors.patientName = 'Patient name required';
     }
     
     if (!formData.doctorId || formData.doctorId === 0) {
-      errors.doctorId = 'Please select a doctor';
+      errors.doctorId = 'Doctor selection required';
     }
     
     if (!validateRequired(formData.appointmentTime)) {
-      errors.appointmentTime = 'Appointment time is required';
+      errors.appointmentTime = 'Appointment time required';
     }
     
     if (formData.patientEmail && !validateEmail(formData.patientEmail)) {
-      errors.patientEmail = 'Please enter a valid email address';
+      errors.patientEmail = 'Invalid email format';
     }
     
     // Check if appointment time is in the future
@@ -92,7 +76,7 @@ export default function AppointmentsPage() {
       const appointmentDate = new Date(formData.appointmentTime);
       const now = new Date();
       if (appointmentDate <= now) {
-        errors.appointmentTime = 'Appointment time must be in the future';
+        errors.appointmentTime = 'Must be future date and time';
       }
     }
     
@@ -110,18 +94,16 @@ export default function AppointmentsPage() {
       setError(null);
       
       if (editingAppointment) {
-        const updatedAppointment = await apiService.updateAppointment(editingAppointment.id, formData);
-        setAppointments(prev => prev.map(a => a.id === editingAppointment.id ? updatedAppointment : a));
+        await appointmentMutations.update(editingAppointment.id, formData);
         setEditingAppointment(null);
       } else {
-        const newAppointment = await apiService.createAppointment(formData);
-        setAppointments(prev => [...prev, newAppointment]);
+        await appointmentMutations.create(formData);
       }
       
       resetForm();
       setShowAddForm(false);
     } catch (err: unknown) {
-      setError(editingAppointment ? 'Failed to update appointment.' : 'Failed to create appointment.');
+      setError(editingAppointment ? 'Failed to update appointment' : 'Failed to create appointment');
       console.error('Error saving appointment:', err);
     } finally {
       setIsSubmitting(false);
@@ -146,8 +128,7 @@ export default function AppointmentsPage() {
     if (!confirm('Are you sure you want to delete this appointment?')) return;
     
     try {
-      await apiService.deleteAppointment(id);
-      setAppointments(prev => prev.filter(a => a.id !== id));
+      await appointmentMutations.delete(id);
     } catch (err: unknown) {
       setError('Failed to delete appointment.');
       console.error('Error deleting appointment:', err);

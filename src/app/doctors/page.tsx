@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useState, useCallback, useEffect } from 'react';
 import { LoadingOverlay, LoadingSpinner } from '../../components/LoadingSpinner';
 import ProtectedRoute from '../../components/ProtectedRoute';
-import { apiService, Doctor, CreateDoctorRequest } from '../../services/api';
+import { Doctor, CreateDoctorRequest } from '../../services/api';
+import { useDoctors, doctorMutations } from '../../hooks/useApi';
 import { validateRequired, validateEmail } from '../../utils/validation';
 import { 
   X, 
@@ -16,15 +16,15 @@ import {
 } from 'lucide-react';
 
 export default function DoctorsPage() {
-  const { } = useAuth();
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  // Use SWR hooks for data fetching with shared cache
+  const { data: doctors = [], error: doctorsError, isLoading: doctorsLoading, mutate: mutateDoctors } = useDoctors();
+  
   const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
   const [filter, setFilter] = useState({ 
     specialization: '', 
     location: '', 
     status: ''
   });
-  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -42,24 +42,12 @@ export default function DoctorsPage() {
   });
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    loadDoctors();
-  }, []);
+  // Handle errors from SWR
+  if (doctorsError && !error) {
+    setError('Failed to load doctors');
+  }
 
-  const loadDoctors = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const data = await apiService.getDoctors();
-      setDoctors(data);
-    } catch (err: unknown) {
-      setError('Failed to load doctors. Please try again.');
-      console.error('Error loading doctors:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  // Filter doctors based on filter criteria
   const filterDoctors = useCallback(() => {
     let filtered = doctors;
     
@@ -90,23 +78,23 @@ export default function DoctorsPage() {
     const errors: Record<string, string> = {};
     
     if (!validateRequired(formData.name)) {
-      errors.name = 'Doctor name is required';
+      errors.name = 'Name required';
     }
     
     if (!validateRequired(formData.specialization)) {
-      errors.specialization = 'Specialization is required';
+      errors.specialization = 'Specialization required';
     }
     
     if (!validateRequired(formData.gender)) {
-      errors.gender = 'Gender is required';
+      errors.gender = 'Gender required';
     }
     
     if (!validateRequired(formData.location)) {
-      errors.location = 'Location is required';
+      errors.location = 'Location required';
     }
     
     if (formData.email && !validateEmail(formData.email)) {
-      errors.email = 'Please enter a valid email address';
+      errors.email = 'Invalid email format';
     }
     
     setValidationErrors(errors);
@@ -123,18 +111,16 @@ export default function DoctorsPage() {
       setError(null);
       
       if (editingDoctor) {
-        const updatedDoctor = await apiService.updateDoctor(editingDoctor.id, formData);
-        setDoctors(prev => prev.map(d => d.id === editingDoctor.id ? updatedDoctor : d));
+        await doctorMutations.update(editingDoctor.id, formData);
         setEditingDoctor(null);
       } else {
-        const newDoctor = await apiService.createDoctor(formData);
-        setDoctors(prev => [...prev, newDoctor]);
+        await doctorMutations.create(formData);
       }
       
       resetForm();
       setShowAddForm(false);
     } catch (err: unknown) {
-      setError(editingDoctor ? 'Failed to update doctor.' : 'Failed to add doctor.');
+      setError(editingDoctor ? 'Failed to update doctor' : 'Failed to add doctor');
       console.error('Error saving doctor:', err);
     } finally {
       setIsSubmitting(false);
@@ -160,8 +146,7 @@ export default function DoctorsPage() {
     if (!confirm('Are you sure you want to delete this doctor?')) return;
     
     try {
-      await apiService.deleteDoctor(id);
-      setDoctors(prev => prev.filter(d => d.id !== id));
+      await doctorMutations.delete(id);
     } catch (err: unknown) {
       setError('Failed to delete doctor.');
       console.error('Error deleting doctor:', err);
@@ -170,8 +155,7 @@ export default function DoctorsPage() {
 
   const updateDoctorStatus = async (id: number, status: 'available' | 'busy' | 'off-duty') => {
     try {
-      const updatedDoctor = await apiService.updateDoctorStatus(id, status);
-      setDoctors(prev => prev.map(d => d.id === id ? updatedDoctor : d));
+      await doctorMutations.updateStatus(id, status);
     } catch (err: unknown) {
       setError('Failed to update doctor status.');
       console.error('Error updating doctor status:', err);
@@ -208,7 +192,7 @@ export default function DoctorsPage() {
 
   return (
     <ProtectedRoute>
-      <LoadingOverlay isLoading={isLoading} message="Loading doctors...">
+      <LoadingOverlay isLoading={doctorsLoading} message="Loading doctors...">
         <div className="min-h-screen bg-white text-gray-900 p-6">
           <div className="max-w-7xl mx-auto space-y-6">
             {error && (
@@ -217,7 +201,7 @@ export default function DoctorsPage() {
                   <span>{error}</span>
                   <button 
                     onClick={() => setError(null)}
-                    className="text-red-500 hover:text-red-700"
+                    className="text-red-500 hover:text-red-700 p-1"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -226,18 +210,18 @@ export default function DoctorsPage() {
             )}
 
             {/* Header */}
-            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm">
-              <div className="flex justify-between items-center">
+            <div className="bg-white border border-gray-200 p-6 md:p-8 rounded-lg shadow-sm">
+              <div className="flex flex-col space-y-4 xl:flex-row xl:justify-between xl:items-center xl:space-y-0">
                 <div>
-                  <h1 className="text-2xl font-bold text-violet-500 mb-2">Doctor Management</h1>
-                  <p className="text-gray-600">Manage doctor profiles and availability</p>
+                  <h1 className="text-2xl md:text-3xl font-bold text-violet-500 mb-2">Doctor Management</h1>
+                  <p className="text-base md:text-lg text-gray-600">Manage doctor profiles and availability</p>
                 </div>
                 <button
                   onClick={() => {
                     resetForm();
                     setShowAddForm(!showAddForm);
                   }}
-                  className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded flex items-center gap-2"
+                  className="w-full sm:w-auto bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded flex items-center justify-center gap-2 transition-colors"
                 >
                   {showAddForm ? (
                     <>
@@ -247,7 +231,7 @@ export default function DoctorsPage() {
                   ) : (
                     <>
                       <Plus className="h-4 w-4" />
-                      Add Doctor
+                      <span>Add Doctor</span>
                     </>
                   )}
                 </button>
@@ -255,9 +239,9 @@ export default function DoctorsPage() {
             </div>
 
             {/* Filters */}
-            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Filters</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white border border-gray-200 p-6 md:p-8 rounded-lg shadow-sm">
+              <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-6">Filters</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Specialization
@@ -266,7 +250,7 @@ export default function DoctorsPage() {
                     type="text"
                     value={filter.specialization}
                     onChange={(e) => setFilter(prev => ({ ...prev, specialization: e.target.value }))}
-                    className="w-full bg-white text-gray-900 px-3 py-2 rounded border border-gray-300 focus:ring-violet-500 focus:border-violet-500"
+                    className="w-full bg-white text-gray-900 px-4 py-3 rounded border border-gray-300 focus:ring-violet-500 focus:border-violet-500"
                     placeholder="Filter by specialization"
                   />
                 </div>
@@ -278,7 +262,7 @@ export default function DoctorsPage() {
                     type="text"
                     value={filter.location}
                     onChange={(e) => setFilter(prev => ({ ...prev, location: e.target.value }))}
-                    className="w-full bg-white text-gray-900 px-3 py-2 rounded border border-gray-300 focus:ring-violet-500 focus:border-violet-500"
+                    className="w-full bg-white text-gray-900 px-4 py-3 rounded border border-gray-300 focus:ring-violet-500 focus:border-violet-500"
                     placeholder="Filter by location"
                   />
                 </div>
@@ -289,7 +273,7 @@ export default function DoctorsPage() {
                   <select
                     value={filter.status}
                     onChange={(e) => setFilter(prev => ({ ...prev, status: e.target.value }))}
-                    className="w-full bg-white text-gray-900 px-3 py-2 rounded border border-gray-300 focus:ring-violet-500 focus:border-violet-500"
+                    className="w-full bg-white text-gray-900 px-4 py-3 rounded border border-gray-300 focus:ring-violet-500 focus:border-violet-500"
                   >
                     <option value="">All</option>
                     <option value="available">Available</option>
@@ -302,12 +286,12 @@ export default function DoctorsPage() {
 
             {/* Add/Edit Doctor Form */}
             {showAddForm && (
-              <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">
+              <div className="bg-white border border-gray-200 p-6 md:p-8 rounded-lg shadow-sm">
+                <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-6">
                   {editingDoctor ? 'Edit Doctor' : 'Add New Doctor'}
                 </h2>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Full Name *
@@ -316,7 +300,7 @@ export default function DoctorsPage() {
                         type="text"
                         value={formData.name}
                         onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                        className={`w-full bg-white text-gray-900 px-3 py-2 rounded border ${
+                        className={`w-full bg-white text-gray-900 px-4 py-3 rounded border ${
                           validationErrors.name ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-violet-500 focus:border-violet-500'
                         }`}
                         placeholder="Enter doctor's full name"
@@ -334,7 +318,7 @@ export default function DoctorsPage() {
                       <select
                         value={formData.specialization}
                         onChange={(e) => setFormData(prev => ({ ...prev, specialization: e.target.value }))}
-                        className={`w-full bg-white text-gray-900 px-3 py-2 rounded border ${
+                        className={`w-full bg-white text-gray-900 px-4 py-3 rounded border ${
                           validationErrors.specialization ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-violet-500 focus:border-violet-500'
                         }`}
                         disabled={isSubmitting}
@@ -356,7 +340,7 @@ export default function DoctorsPage() {
                       <select
                         value={formData.gender}
                         onChange={(e) => setFormData(prev => ({ ...prev, gender: e.target.value }))}
-                        className={`w-full bg-white text-gray-900 px-3 py-2 rounded border ${
+                        className={`w-full bg-white text-gray-900 px-4 py-3 rounded border ${
                           validationErrors.gender ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-violet-500 focus:border-violet-500'
                         }`}
                         disabled={isSubmitting}
@@ -379,7 +363,7 @@ export default function DoctorsPage() {
                         type="text"
                         value={formData.location}
                         onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                        className={`w-full bg-white text-gray-900 px-3 py-2 rounded border ${
+                        className={`w-full bg-white text-gray-900 px-4 py-3 rounded border ${
                           validationErrors.location ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-violet-500 focus:border-violet-500'
                         }`}
                         placeholder="Enter clinic/hospital location"
@@ -398,7 +382,7 @@ export default function DoctorsPage() {
                         type="email"
                         value={formData.email}
                         onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                        className={`w-full bg-white text-gray-900 px-3 py-2 rounded border ${
+                        className={`w-full bg-white text-gray-900 px-4 py-3 rounded border ${
                           validationErrors.email ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-violet-500 focus:border-violet-500'
                         }`}
                         placeholder="Enter email address"
@@ -417,7 +401,7 @@ export default function DoctorsPage() {
                         type="tel"
                         value={formData.phone}
                         onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                        className="w-full bg-white text-gray-900 px-3 py-2 rounded border border-gray-300 focus:ring-violet-500 focus:border-violet-500"
+                        className="w-full bg-white text-gray-900 px-4 py-3 rounded border border-gray-300 focus:ring-violet-500 focus:border-violet-500"
                         placeholder="Enter phone number"
                         disabled={isSubmitting}
                       />
@@ -432,17 +416,17 @@ export default function DoctorsPage() {
                       type="text"
                       value={formData.availability}
                       onChange={(e) => setFormData(prev => ({ ...prev, availability: e.target.value }))}
-                      className="w-full bg-white text-gray-900 px-3 py-2 rounded border border-gray-300 focus:ring-violet-500 focus:border-violet-500"
+                      className="w-full bg-white text-gray-900 px-4 py-3 rounded border border-gray-300 focus:ring-violet-500 focus:border-violet-500"
                       placeholder="e.g., Mon-Fri 9AM-5PM"
                       disabled={isSubmitting}
                     />
                   </div>
 
-                  <div className="flex gap-3">
+                  <div className="flex flex-col sm:flex-row gap-4">
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="bg-violet-600 hover:bg-violet-700 disabled:bg-gray-400 text-white py-2 px-4 rounded flex items-center gap-2"
+                      className="w-full sm:w-auto bg-violet-600 hover:bg-violet-700 disabled:bg-gray-400 text-white py-3 px-6 rounded flex items-center justify-center gap-2 transition-colors"
                     >
                       {isSubmitting && <LoadingSpinner size="sm" />}
                       <Plus className="h-4 w-4" />
@@ -454,7 +438,7 @@ export default function DoctorsPage() {
                         resetForm();
                         setShowAddForm(false);
                       }}
-                      className="bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 px-4 rounded border border-gray-300"
+                      className="w-full sm:w-auto bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 px-6 rounded border border-gray-300 transition-colors"
                     >
                       Cancel
                     </button>

@@ -1,23 +1,30 @@
 {
   "name": "frontend",
   "version": "0.1.0",
-  "description": "Front Desk Management System Frontend",
+  "description": "Healthcare facility front desk management application",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p 3001",
     "build": "next build",
     "start": "next start -p 3001",
-    "lint": "next lint"
+    "lint": "next lint",
+    "analyze": "ANALYZE=true npm run build",
+    "perf": "npm run build && npx lighthouse http://localhost:3001 --chrome-flags=\"--headless\" --output=html --output-path=./lighthouse-report.html",
+    "bundle-analyze": "npm run analyze"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.17",
+    "@next/bundle-analyzer": "^15.4.4",
+    "@tanstack/react-query": "^5.83.0",
     "axios": "^1.11.0",
+    "critters": "^0.0.23",
     "lucide-react": "^0.263.1",
     "next": "15.4.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hook-form": "^7.48.0",
-    "react-hot-toast": "^2.4.1"
+    "react-hot-toast": "^2.4.1",
+    "swr": "^2.3.4"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

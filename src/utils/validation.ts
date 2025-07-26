@@ -25,7 +25,7 @@ export const validateEmail = (email: string): boolean => {
 
 export const validateField = (value: unknown, rules: ValidationRule): string | null => {
   if (rules.required && (!value || (typeof value === 'string' && value.trim() === ''))) {
-    return 'This field is required';
+    return 'Required field';
   }
 
   if (!value || (typeof value === 'string' && value.trim() === '')) {
@@ -34,11 +34,11 @@ export const validateField = (value: unknown, rules: ValidationRule): string | n
 
   if (typeof value === 'string') {
     if (rules.minLength && value.length < rules.minLength) {
-      return `Must be at least ${rules.minLength} characters long`;
+      return `Minimum ${rules.minLength} characters required`;
     }
 
     if (rules.maxLength && value.length > rules.maxLength) {
-      return `Must be no more than ${rules.maxLength} characters long`;
+      return `Maximum ${rules.maxLength} characters allowed`;
     }
 
     if (rules.pattern && !rules.pattern.test(value)) {

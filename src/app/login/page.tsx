@@ -125,7 +125,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-white flex items-center justify-center">
       <div className="bg-white border border-gray-200 p-8 rounded-lg shadow-xl w-full max-w-md">
         <h1 className="text-3xl font-bold mb-6 text-gray-900 text-center">
-          {isSignUp ? 'Create Account' : 'Front Desk Login'}
+          {isSignUp ? 'Create Account' : 'Staff Login'}
         </h1>
         
         {(message || error) && (
@@ -208,7 +208,7 @@ export default function LoginPage() {
           >
             {isSignUp 
               ? 'Already have an account? Sign in' 
-              : "Don't have an account? Create one"
+              : 'Need an account? Create one'
             }
           </button>
         </div>

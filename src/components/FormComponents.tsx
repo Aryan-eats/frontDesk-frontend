@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 
 interface FormFieldProps {
   label: string;
@@ -14,7 +14,7 @@ interface FormFieldProps {
   className?: string;
 }
 
-export const FormField: React.FC<FormFieldProps> = ({
+export const FormField = memo<FormFieldProps>(({
   label,
   name,
   type = 'text',
@@ -27,16 +27,16 @@ export const FormField: React.FC<FormFieldProps> = ({
   disabled = false,
   className = ''
 }) => {
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value;
     onChange(name, newValue);
-  };
+  }, [name, onChange, type]);
 
-  const handleBlur = () => {
+  const handleBlur = useCallback(() => {
     if (onBlur) {
       onBlur(name);
     }
-  };
+  }, [name, onBlur]);
 
   return (
     <div className={`space-y-1 ${className}`}>
@@ -64,7 +64,9 @@ export const FormField: React.FC<FormFieldProps> = ({
       )}
     </div>
   );
-};
+});
+
+FormField.displayName = 'FormField';
 
 interface SelectFieldProps {
   label: string;
@@ -80,7 +82,7 @@ interface SelectFieldProps {
   className?: string;
 }
 
-export const SelectField: React.FC<SelectFieldProps> = ({
+export const SelectField = memo<SelectFieldProps>(({
   label,
   name,
   value,
@@ -93,21 +95,21 @@ export const SelectField: React.FC<SelectFieldProps> = ({
   disabled = false,
   className = ''
 }) => {
-  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     onChange(name, e.target.value);
-  };
+  }, [name, onChange]);
 
-  const handleBlur = () => {
+  const handleBlur = useCallback(() => {
     if (onBlur) {
       onBlur(name);
     }
-  };
+  }, [name, onBlur]);
 
   return (
     <div className={`space-y-1 ${className}`}>
-      <label htmlFor={name} className="block text-sm font-medium text-gray-300">
+      <label htmlFor={name} className="block text-sm font-medium text-gray-900">
         {label}
-        {required && <span className="text-red-400 ml-1">*</span>}
+        {required && <span className="text-red-500 ml-1">*</span>}
       </label>
       <select
         id={name}
@@ -116,10 +118,10 @@ export const SelectField: React.FC<SelectFieldProps> = ({
         onChange={handleChange}
         onBlur={handleBlur}
         disabled={disabled}
-        className={`w-full px-3 py-2 bg-gray-700 border rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+        className={`w-full px-3 py-2 bg-white border rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent ${
           error 
             ? 'border-red-500 focus:ring-red-500' 
-            : 'border-gray-600 hover:border-gray-500'
+            : 'border-gray-300 hover:border-gray-400'
         } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
       >
         <option value="">{placeholder}</option>
@@ -130,11 +132,13 @@ export const SelectField: React.FC<SelectFieldProps> = ({
         ))}
       </select>
       {error && (
-        <p className="text-red-400 text-sm">{error}</p>
+        <p className="text-red-500 text-sm">{error}</p>
       )}
     </div>
   );
-};
+});
+
+SelectField.displayName = 'SelectField';
 
 interface TextAreaFieldProps {
   label: string;
@@ -150,7 +154,7 @@ interface TextAreaFieldProps {
   className?: string;
 }
 
-export const TextAreaField: React.FC<TextAreaFieldProps> = ({
+export const TextAreaField = memo<TextAreaFieldProps>(({
   label,
   name,
   value,
@@ -163,21 +167,21 @@ export const TextAreaField: React.FC<TextAreaFieldProps> = ({
   rows = 3,
   className = ''
 }) => {
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     onChange(name, e.target.value);
-  };
+  }, [name, onChange]);
 
-  const handleBlur = () => {
+  const handleBlur = useCallback(() => {
     if (onBlur) {
       onBlur(name);
     }
-  };
+  }, [name, onBlur]);
 
   return (
     <div className={`space-y-1 ${className}`}>
-      <label htmlFor={name} className="block text-sm font-medium text-gray-300">
+      <label htmlFor={name} className="block text-sm font-medium text-gray-900">
         {label}
-        {required && <span className="text-red-400 ml-1">*</span>}
+        {required && <span className="text-red-500 ml-1">*</span>}
       </label>
       <textarea
         id={name}
@@ -188,15 +192,17 @@ export const TextAreaField: React.FC<TextAreaFieldProps> = ({
         placeholder={placeholder}
         disabled={disabled}
         rows={rows}
-        className={`w-full px-3 py-2 bg-gray-700 border rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical ${
+        className={`w-full px-3 py-2 bg-white border rounded-md text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent resize-vertical ${
           error 
             ? 'border-red-500 focus:ring-red-500' 
-            : 'border-gray-600 hover:border-gray-500'
+            : 'border-gray-300 hover:border-gray-400'
         } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
       />
       {error && (
-        <p className="text-red-400 text-sm">{error}</p>
+        <p className="text-red-500 text-sm">{error}</p>
       )}
     </div>
   );
-};
+});
+
+TextAreaField.displayName = 'TextAreaField';

@@ -1,39 +1,61 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback, memo } from 'react';
 import { apiService, User, AuthResponse, LoginRequest, SignUpRequest } from '../services/api';
 
-interface AuthContextType {
+// Split auth context into state and actions for better performance
+interface AuthStateContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  error: string | null;
+}
+
+interface AuthActionsContextType {
   login: (credentials: LoginRequest) => Promise<void>;
   signup: (userData: SignUpRequest) => Promise<void>;
   logout: () => void;
-  error: string | null;
   clearError: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthStateContext = createContext<AuthStateContextType | undefined>(undefined);
+const AuthActionsContext = createContext<AuthActionsContextType | undefined>(undefined);
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
+// Custom hooks for using auth contexts
+export const useAuthState = () => {
+  const context = useContext(AuthStateContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('useAuthState must be used within an AuthProvider');
   }
   return context;
+};
+
+export const useAuthActions = () => {
+  const context = useContext(AuthActionsContext);
+  if (context === undefined) {
+    throw new Error('useAuthActions must be used within an AuthProvider');
+  }
+  return context;
+};
+
+// Backward compatibility hook
+export const useAuth = () => {
+  const state = useAuthState();
+  const actions = useAuthActions();
+  return { ...state, ...actions };
 };
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+export const AuthProvider: React.FC<AuthProviderProps> = memo(({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const isAuthenticated = !!user;
+  // Memoize computed values
+  const isAuthenticated = useMemo(() => !!user, [user]);
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -52,7 +74,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(false);
   }, []);
 
-  const login = async (credentials: LoginRequest): Promise<void> => {
+  // Memoize action functions to prevent unnecessary re-renders
+  const login = useCallback(async (credentials: LoginRequest): Promise<void> => {
     try {
       setIsLoading(true);
       setError(null);
@@ -63,16 +86,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.setItem('user', JSON.stringify(response.user));
       
       setUser(response.user);
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error && 'response' in err && err.response && typeof err.response === 'object' && 'data' in err.response && err.response.data && typeof err.response.data === 'object' && 'message' in err.response.data ? String(err.response.data.message) : 'Login failed. Please check your credentials.';
+    } catch {
+      const errorMessage = 'Invalid credentials. Please try again.';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const signup = async (userData: SignUpRequest): Promise<void> => {
+  const signup = useCallback(async (userData: SignUpRequest): Promise<void> => {
     try {
       setIsLoading(true);
       setError(null);
@@ -84,40 +107,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.setItem('user', JSON.stringify(response.user));
       
       setUser(response.user);
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error && 'response' in err && err.response && typeof err.response === 'object' && 'data' in err.response && err.response.data && typeof err.response.data === 'object' && 'message' in err.response.data ? String(err.response.data.message) : 'Signup failed. Please try again.';
+    } catch {
+      const errorMessage = 'Registration failed. Please try again.';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const logout = (): void => {
+  const logout = useCallback((): void => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
     setUser(null);
     setError(null);
-  };
+  }, []);
 
-  const clearError = (): void => {
+  const clearError = useCallback((): void => {
     setError(null);
-  };
+  }, []);
 
-  const value: AuthContextType = {
+  // Memoize state and actions separately
+  const stateValue = useMemo<AuthStateContextType>(() => ({
     user,
     isLoading,
     isAuthenticated,
+    error,
+  }), [user, isLoading, isAuthenticated, error]);
+
+  const actionsValue = useMemo<AuthActionsContextType>(() => ({
     login,
     signup,
     logout,
-    error,
     clearError,
-  };
+  }), [login, signup, logout, clearError]);
 
   return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+    <AuthStateContext.Provider value={stateValue}>
+      <AuthActionsContext.Provider value={actionsValue}>
+        {children}
+      </AuthActionsContext.Provider>
+    </AuthStateContext.Provider>
   );
-};
+});
+
+AuthProvider.displayName = 'AuthProvider';

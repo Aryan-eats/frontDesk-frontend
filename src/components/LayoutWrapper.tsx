@@ -1,12 +1,27 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { useState, memo, useCallback, useMemo } from 'react';
 import Sidebar from './Sidebar';
+import Navigation from './Navigation';
 
-export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
+const LayoutWrapper = memo<{ children: React.ReactNode }>(({ children }) => {
   const pathname = usePathname();
-  const isLoginPage = pathname === '/login';
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Memoize computed values
+  const isLoginPage = useMemo(() => pathname === '/login', [pathname]);
+
+  // Memoize event handlers
+  const handleMenuClick = useCallback(() => {
+    setSidebarOpen(!sidebarOpen);
+  }, [sidebarOpen]);
+
+  const handleSidebarClose = useCallback(() => {
+    setSidebarOpen(false);
+  }, []);
+
+  // Early return for login page
   if (isLoginPage) {
     return (
       <main>
@@ -17,10 +32,17 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
 
   return (
     <>
-      <Sidebar />
-      <main className="pt-16 pl-64">
-        {children}
+      <Navigation onMenuClick={handleMenuClick} />
+      <Sidebar isOpen={sidebarOpen} onClose={handleSidebarClose} />
+      <main className="pt-16 md:pl-64 min-h-screen bg-gray-50">
+        <div className="w-full max-w-full overflow-hidden">
+          {children}
+        </div>
       </main>
     </>
   );
-}
+});
+
+LayoutWrapper.displayName = 'LayoutWrapper';
+
+export default LayoutWrapper;

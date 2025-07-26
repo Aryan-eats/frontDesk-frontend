@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg';
@@ -6,7 +6,7 @@ interface LoadingSpinnerProps {
   className?: string;
 }
 
-export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ 
+export const LoadingSpinner = memo<LoadingSpinnerProps>(({ 
   size = 'md', 
   color = 'primary',
   className = '' 
@@ -29,6 +29,8 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
       xmlns="http://www.w3.org/2000/svg"
       fill="none"
       viewBox="0 0 24 24"
+      aria-label="Loading"
+      role="status"
     >
       <circle
         className="opacity-25"
@@ -45,7 +47,9 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
       ></path>
     </svg>
   );
-};
+});
+
+LoadingSpinner.displayName = 'LoadingSpinner';
 
 interface LoadingOverlayProps {
   isLoading: boolean;
@@ -53,7 +57,7 @@ interface LoadingOverlayProps {
   children: React.ReactNode;
 }
 
-export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ 
+export const LoadingOverlay = memo<LoadingOverlayProps>(({ 
   isLoading, 
   message = 'Loading...', 
   children 
@@ -71,6 +75,8 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
       )}
     </div>
   );
-};
+});
+
+LoadingOverlay.displayName = 'LoadingOverlay';
 
 export default LoadingSpinner;
