@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { LoadingOverlay, LoadingSpinner } from '../../components/LoadingSpinner';
 import ProtectedRoute from '../../components/ProtectedRoute';
-import { Appointment, Doctor, CreateAppointmentRequest } from '../../services/api';
+import { Appointment, CreateAppointmentRequest } from '../../services/api';
 import { useAppointments, useDoctors, appointmentMutations } from '../../hooks/useApi';
 import { validateRequired, validateEmail } from '../../utils/validation';
 import { 
@@ -19,7 +19,7 @@ import {
 
 export default function AppointmentsPage() {
   // Use SWR hooks for data fetching with shared cache
-  const { data: appointments = [], error: appointmentsError, isLoading: appointmentsLoading, mutate: mutateAppointments } = useAppointments();
+  const { data: appointments = [], error: appointmentsError, isLoading: appointmentsLoading } = useAppointments();
   const { data: doctors = [], error: doctorsError, isLoading: doctorsLoading } = useDoctors();
 
   const [isSubmitting, setIsSubmitting] = useState(false);

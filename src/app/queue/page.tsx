@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { LoadingOverlay, LoadingSpinner } from '../../components/LoadingSpinner';
 import ProtectedRoute from '../../components/ProtectedRoute';
-import { QueueItem, Doctor } from '../../services/api';
 import { useQueue, useDoctors, queueMutations } from '../../hooks/useApi';
 import { validateRequired } from '../../utils/validation';
 import { 

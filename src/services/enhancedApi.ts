@@ -1,5 +1,4 @@
-import axios, { AxiosInstance, AxiosResponse, AxiosRequestConfig } from 'axios';
-import { apiService, Doctor, Appointment, QueueItem, User } from './api';
+import { apiService, Doctor, Appointment, QueueItem, CreateQueueRequest } from './api';
 
 // Cache interface
 interface CacheEntry<T> {
@@ -10,12 +9,12 @@ interface CacheEntry<T> {
 
 // Request deduplication
 interface PendingRequest {
-  promise: Promise<any>;
+  promise: Promise<unknown>;
   timestamp: number;
 }
 
 class EnhancedApiService {
-  private cache = new Map<string, CacheEntry<any>>();
+  private cache = new Map<string, CacheEntry<unknown>>();
   private pendingRequests = new Map<string, PendingRequest>();
   private abortControllers = new Map<string, AbortController>();
   
@@ -28,7 +27,7 @@ class EnhancedApiService {
     default: 1 * 60 * 1000, // 1 minute
   };
 
-  private getCacheKey(endpoint: string, params?: any): string {
+  private getCacheKey(endpoint: string, params?: Record<string, unknown>): string {
     return `${endpoint}${params ? JSON.stringify(params) : ''}`;
   }
 
@@ -37,7 +36,7 @@ class EnhancedApiService {
   }
 
   private getCachedData<T>(key: string): T | null {
-    const entry = this.cache.get(key);
+    const entry = this.cache.get(key) as CacheEntry<T> | undefined;
     if (entry && this.isValidCache(entry)) {
       return entry.data;
     }
@@ -69,7 +68,7 @@ class EnhancedApiService {
     // Check for pending request (deduplication)
     const pendingRequest = this.pendingRequests.get(key);
     if (pendingRequest) {
-      return pendingRequest.promise;
+      return pendingRequest.promise as Promise<T>;
     }
 
     // Create new request
@@ -192,7 +191,7 @@ class EnhancedApiService {
     }
   }
 
-  async addToQueueOptimistic(queueItem: any): Promise<QueueItem> {
+  async addToQueueOptimistic(queueItem: CreateQueueRequest): Promise<QueueItem> {
     // Invalidate queue caches immediately
     this.invalidateCache(['queue', 'queue/waiting']);
     

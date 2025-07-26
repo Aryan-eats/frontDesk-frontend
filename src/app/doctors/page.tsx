@@ -17,7 +17,7 @@ import {
 
 export default function DoctorsPage() {
   // Use SWR hooks for data fetching with shared cache
-  const { data: doctors = [], error: doctorsError, isLoading: doctorsLoading, mutate: mutateDoctors } = useDoctors();
+  const { data: doctors = [], error: doctorsError, isLoading: doctorsLoading } = useDoctors();
   
   const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
   const [filter, setFilter] = useState({ 

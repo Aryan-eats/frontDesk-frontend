@@ -144,7 +144,7 @@ export const PageErrorBoundary: React.FC<{ children: ReactNode }> = ({
           <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Page Error</h1>
           <p className="text-gray-600 mb-4">
-            This page encountered an error and couldn't load properly.
+            This page encountered an error and couldn&apos;t load properly.
           </p>
           <button
             onClick={() => window.location.reload()}

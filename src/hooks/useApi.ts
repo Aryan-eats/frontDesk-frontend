@@ -1,6 +1,6 @@
 import useSWR, { SWRConfiguration, mutate } from 'swr';
 import { enhancedApiService } from '../services/enhancedApi';
-import { Doctor, Appointment, QueueItem } from '../services/api';
+import { Doctor, Appointment, QueueItem, CreateDoctorRequest, CreateAppointmentRequest, CreateQueueRequest } from '../services/api';
 
 // Default SWR configuration
 const defaultConfig: SWRConfiguration = {
@@ -123,7 +123,7 @@ export const doctorMutations = {
     }
   },
   
-  create: async (doctorData: any) => {
+  create: async (doctorData: CreateDoctorRequest) => {
     try {
       const result = await enhancedApiService.createDoctor(doctorData);
       
@@ -139,7 +139,7 @@ export const doctorMutations = {
     }
   },
   
-  update: async (id: number, doctorData: any) => {
+  update: async (id: number, doctorData: Partial<Doctor>) => {
     // Optimistic update
     await mutate('doctors', 
       (currentDoctors: Doctor[] | undefined) => 
@@ -286,7 +286,7 @@ export const queueMutations = {
     }
   },
   
-  addToQueue: async (queueItem: any) => {
+  addToQueue: async (queueItem: CreateQueueRequest) => {
     try {
       const result = await enhancedApiService.addToQueueOptimistic(queueItem);
       
@@ -336,7 +336,7 @@ export const queueMutations = {
 };
 
 export const appointmentMutations = {
-  create: async (appointmentData: any) => {
+  create: async (appointmentData: CreateAppointmentRequest) => {
     try {
       const result = await enhancedApiService.createAppointment(appointmentData);
       
@@ -349,7 +349,7 @@ export const appointmentMutations = {
     }
   },
   
-  update: async (id: number, appointmentData: any) => {
+  update: async (id: number, appointmentData: Partial<Appointment>) => {
     // Optimistic update
     await mutate('appointments', 
       (currentAppointments: Appointment[] | undefined) => 

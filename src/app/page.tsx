@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback, Suspense, lazy, memo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthState } from '../contexts/AuthContext';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -81,7 +81,7 @@ const DashboardStats = memo(({
       <div className="flex items-center justify-between">
         <div>
           <div className="text-3xl font-bold text-blue-600">{appointmentsCount}</div>
-          <div className="text-sm text-gray-600 font-medium">Today's Appointments</div>
+          <div className="text-sm text-gray-600 font-medium">Today&apos;s Appointments</div>
         </div>
         <div className="h-12 w-12 bg-blue-50 rounded-lg flex items-center justify-center">
           <Calendar className="h-6 w-6 text-blue-600" />
@@ -101,7 +101,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
 
   // Use SWR hooks for data fetching with caching
-  const { data: queue = [], error: queueError, mutate: mutateQueue, isLoading: queueLoading } = useQueue();
+  const { data: queue = [], error: queueError, isLoading: queueLoading } = useQueue();
   const { data: doctors = [], error: doctorsError, isLoading: doctorsLoading } = useDoctors();
   const { data: appointments = [], error: appointmentsError, isLoading: appointmentsLoading } = useAppointments();
 
@@ -233,7 +233,7 @@ export default function HomePage() {
                 Welcome back, <span className="text-violet-500">{user?.fullName || user?.username || 'User'}!</span>
               </h1>
               <p className="text-base md:text-lg text-gray-600">
-                Here's your front desk dashboard overview
+                Here&apos;s your front desk dashboard overview
               </p>
             </div>
 
@@ -290,7 +290,7 @@ export default function HomePage() {
               </div>
             </ComponentErrorBoundary>
 
-            {/* Queue Management and Today's Appointments Section */}
+            {/* Queue Management and Today&apos;s Appointments Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Queue Management Section */}
               <ComponentErrorBoundary componentName="Queue Management">
@@ -403,13 +403,13 @@ export default function HomePage() {
                 </div>
               </ComponentErrorBoundary>
 
-              {/* Today's Appointments Section */}
-              <ComponentErrorBoundary componentName="Today's Appointments">
+              {/* Today&apos;s Appointments Section */}
+              <ComponentErrorBoundary componentName="Today&apos;s Appointments">
                 <div className="bg-white border border-gray-200 p-6 md:p-8 rounded-xl shadow-sm">
                   <div className="flex flex-col space-y-4 xl:flex-row xl:justify-between xl:items-center xl:space-y-0 mb-6">
                     <h2 className="text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2">
                       <Calendar className="h-6 w-6 text-blue-600" />
-                      Today's Appointments
+                      Today&apos;s Appointments
                     </h2>
                   </div>
                   

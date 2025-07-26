@@ -7,6 +7,7 @@ import React, {
   useCallback 
 } from 'react';
 import { useIntersectionObserver } from '../hooks/usePerformance';
+import { QueueItem } from '../services/api';
 
 interface VirtualScrollProps<T> {
   items: T[];
@@ -90,9 +91,9 @@ export function VirtualScroll<T>({
 
 // Specialized virtual list for queue items
 interface QueueVirtualListProps {
-  items: any[];
-  onItemClick?: (item: any, index: number) => void;
-  onStatusChange?: (item: any, newStatus: string) => void;
+  items: QueueItem[];
+  onItemClick?: (item: QueueItem, index: number) => void;
+  onStatusChange?: (item: QueueItem, newStatus: string) => void;
   className?: string;
 }
 
@@ -102,10 +103,8 @@ export const QueueVirtualList = memo<QueueVirtualListProps>(({
   onStatusChange,
   className = '',
 }) => {
-  const renderQueueItem = useCallback((item: any, index: number) => {
+  const renderQueueItem = useCallback((item: QueueItem, index: number) => {
     const handleClick = () => onItemClick?.(item, index);
-    const handleStatusChange = (newStatus: string) => 
-      onStatusChange?.(item, newStatus);
 
     return (
       <div
@@ -148,7 +147,7 @@ export const QueueVirtualList = memo<QueueVirtualListProps>(({
         )}
       </div>
     );
-  }, [onItemClick, onStatusChange]);
+  }, [onItemClick]);
 
   return (
     <VirtualScroll

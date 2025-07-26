@@ -31,9 +31,9 @@ export default function PerformanceMonitor({ children }: PerformanceMonitorProps
       // Observe different types of performance entries
       try {
         observer.observe({ entryTypes: ['navigation', 'paint', 'largest-contentful-paint'] });
-      } catch (e) {
+      } catch (error) {
         // Fallback for browsers that don't support all entry types
-        console.warn('Performance monitoring not fully supported');
+        console.warn('Performance monitoring not fully supported', error);
       }
 
       // Monitor First Contentful Paint (FCP)
@@ -47,16 +47,16 @@ export default function PerformanceMonitor({ children }: PerformanceMonitorProps
 
       try {
         paintObserver.observe({ entryTypes: ['paint'] });
-      } catch (e) {
-        console.warn('Paint timing not supported');
+      } catch (error) {
+        console.warn('Paint timing not supported', error);
       }
 
       // Monitor layout shifts (CLS)
       const clsObserver = new PerformanceObserver((list) => {
         let clsValue = 0;
         list.getEntries().forEach((entry) => {
-          if (!(entry as any).hadRecentInput) {
-            clsValue += (entry as any).value;
+          if (!(entry as PerformanceEntry & { hadRecentInput?: boolean }).hadRecentInput) {
+            clsValue += (entry as PerformanceEntry & { value: number }).value;
           }
         });
         if (clsValue > 0) {
@@ -66,14 +66,14 @@ export default function PerformanceMonitor({ children }: PerformanceMonitorProps
 
       try {
         clsObserver.observe({ entryTypes: ['layout-shift'] });
-      } catch (e) {
+      } catch {
         console.warn('Layout shift monitoring not supported');
       }
 
       // Monitor memory usage (if available)
       if ('memory' in performance) {
         const logMemoryUsage = () => {
-          const memory = (performance as any).memory;
+          const memory = (performance as Performance & { memory: { usedJSHeapSize: number } }).memory;
           console.log(`Memory Usage: ${Math.round(memory.usedJSHeapSize / 1024 / 1024)}MB`);
         };
 
@@ -109,7 +109,7 @@ export default function PerformanceMonitor({ children }: PerformanceMonitorProps
 
         // Check for memory leaks (basic check)
         if ('memory' in performance) {
-          const memory = (performance as any).memory;
+          const memory = (performance as Performance & { memory: { usedJSHeapSize: number } }).memory;
           const heapUsed = memory.usedJSHeapSize / 1024 / 1024;
           if (heapUsed > 100) {
             console.warn(`Performance Warning: High memory usage detected (${Math.round(heapUsed)}MB)`);
