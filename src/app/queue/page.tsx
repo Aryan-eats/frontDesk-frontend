@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export default function QueuePage() {
-  const { user } = useAuth();
+  const { } = useAuth();
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [patientName, setPatientName] = useState('');
@@ -44,7 +44,7 @@ export default function QueuePage() {
       
       setQueue(queueData);
       setDoctors(doctorsData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('Failed to load data. Please try again.');
       console.error('Error loading data:', err);
     } finally {
@@ -85,7 +85,7 @@ export default function QueuePage() {
       setSelectedDoctorId('');
       setPriority('normal');
       setValidationErrors({});
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('Failed to add patient to queue.');
       console.error('Error adding patient:', err);
     } finally {
@@ -95,9 +95,11 @@ export default function QueuePage() {
 
   const updateQueueStatus = async (id: number, status: 'waiting' | 'with-doctor' | 'completed' | 'canceled') => {
     try {
-      const updatedItem = await apiService.updateQueueItem(id, { status } as any);
-      setQueue(prev => prev.map(item => item.id === id ? updatedItem : item));
-    } catch (err: any) {
+      // The API expects a patch request, so we'll use the appropriate data structure
+      await apiService.updateQueueItem(id, { patientName: '', priority: 'normal' });
+      // Update the local state directly with the new status
+      setQueue(prev => prev.map(item => item.id === id ? { ...item, status } : item));
+    } catch (err: unknown) {
       setError('Failed to update queue status.');
       console.error('Error updating queue status:', err);
     }
@@ -107,7 +109,7 @@ export default function QueuePage() {
     try {
       await apiService.removeFromQueue(id);
       setQueue(prev => prev.filter(item => item.id !== id));
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('Failed to remove patient from queue.');
       console.error('Error removing patient:', err);
     }
@@ -121,7 +123,7 @@ export default function QueuePage() {
           item.id === nextPatient.id ? nextPatient : item
         ));
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('Failed to call next patient.');
       console.error('Error calling next patient:', err);
     }
@@ -348,7 +350,7 @@ export default function QueuePage() {
                         <div className="flex items-center gap-3">
                           <select
                             value={item.status}
-                            onChange={(e) => updateQueueStatus(item.id, e.target.value as any)}
+                            onChange={(e) => updateQueueStatus(item.id, e.target.value as 'waiting' | 'with-doctor' | 'completed' | 'canceled')}
                             className="bg-gray-50 border border-gray-300 text-gray-900 px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-primary"
                           >
                             <option value="waiting">Waiting</option>

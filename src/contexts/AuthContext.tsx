@@ -43,7 +43,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       try {
         const parsedUser = JSON.parse(userData);
         setUser(parsedUser);
-      } catch (err) {
+      } catch {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
       }
@@ -63,8 +63,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.setItem('user', JSON.stringify(response.user));
       
       setUser(response.user);
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Login failed. Please check your credentials.';
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error && 'response' in err && err.response && typeof err.response === 'object' && 'data' in err.response && err.response.data && typeof err.response.data === 'object' && 'message' in err.response.data ? String(err.response.data.message) : 'Login failed. Please check your credentials.';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {
@@ -84,8 +84,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.setItem('user', JSON.stringify(response.user));
       
       setUser(response.user);
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Signup failed. Please try again.';
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error && 'response' in err && err.response && typeof err.response === 'object' && 'data' in err.response && err.response.data && typeof err.response.data === 'object' && 'message' in err.response.data ? String(err.response.data.message) : 'Signup failed. Please try again.';
       setError(errorMessage);
       throw new Error(errorMessage);
     } finally {

@@ -1,5 +1,4 @@
 import React from 'react';
-import { AlertCircle, ChevronDown } from 'lucide-react';
 
 interface FormFieldProps {
   label: string;

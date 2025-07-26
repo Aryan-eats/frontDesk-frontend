@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { LoadingOverlay, LoadingSpinner } from '../../components/LoadingSpinner';
 import ProtectedRoute from '../../components/ProtectedRoute';
@@ -12,12 +12,11 @@ import {
   Phone, 
   Plus,
   Edit,
-  Trash2,
-  UserCheck
+  Trash2
 } from 'lucide-react';
 
 export default function DoctorsPage() {
-  const { user } = useAuth();
+  const { } = useAuth();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
   const [filter, setFilter] = useState({ 
@@ -47,17 +46,13 @@ export default function DoctorsPage() {
     loadDoctors();
   }, []);
 
-  useEffect(() => {
-    filterDoctors();
-  }, [filter, doctors]);
-
   const loadDoctors = async () => {
     try {
       setIsLoading(true);
       setError(null);
       const data = await apiService.getDoctors();
       setDoctors(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('Failed to load doctors. Please try again.');
       console.error('Error loading doctors:', err);
     } finally {
@@ -65,7 +60,7 @@ export default function DoctorsPage() {
     }
   };
 
-  const filterDoctors = () => {
+  const filterDoctors = useCallback(() => {
     let filtered = doctors;
     
     if (filter.specialization) {
@@ -85,7 +80,11 @@ export default function DoctorsPage() {
     }
     
     setFilteredDoctors(filtered);
-  };
+  }, [doctors, filter]);
+
+  useEffect(() => {
+    filterDoctors();
+  }, [filterDoctors]);
 
   const validateForm = () => {
     const errors: Record<string, string> = {};
@@ -134,7 +133,7 @@ export default function DoctorsPage() {
       
       resetForm();
       setShowAddForm(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(editingDoctor ? 'Failed to update doctor.' : 'Failed to add doctor.');
       console.error('Error saving doctor:', err);
     } finally {
@@ -163,7 +162,7 @@ export default function DoctorsPage() {
     try {
       await apiService.deleteDoctor(id);
       setDoctors(prev => prev.filter(d => d.id !== id));
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('Failed to delete doctor.');
       console.error('Error deleting doctor:', err);
     }
@@ -173,7 +172,7 @@ export default function DoctorsPage() {
     try {
       const updatedDoctor = await apiService.updateDoctorStatus(id, status);
       setDoctors(prev => prev.map(d => d.id === id ? updatedDoctor : d));
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('Failed to update doctor status.');
       console.error('Error updating doctor status:', err);
     }
@@ -507,7 +506,7 @@ export default function DoctorsPage() {
                         <div className="flex items-center gap-3">
                           <select
                             value={doctor.status}
-                            onChange={(e) => updateDoctorStatus(doctor.id, e.target.value as any)}
+                            onChange={(e) => updateDoctorStatus(doctor.id, e.target.value as 'available' | 'busy' | 'off-duty')}
                             className="bg-white text-gray-900 px-2 py-1 rounded text-sm border border-gray-300 focus:ring-violet-500 focus:border-violet-500"
                           >
                             <option value="available">Available</option>

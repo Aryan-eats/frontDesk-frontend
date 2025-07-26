@@ -14,12 +14,11 @@ import {
   Plus,
   Edit,
   Trash2,
-  UserCheck,
   Clock
 } from 'lucide-react';
 
 export default function AppointmentsPage() {
-  const { user } = useAuth();
+  const { } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,7 +60,7 @@ export default function AppointmentsPage() {
       
       setAppointments(appointmentsData);
       setDoctors(doctorsData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('Failed to load data. Please try again.');
       console.error('Error loading data:', err);
     } finally {
@@ -121,7 +120,7 @@ export default function AppointmentsPage() {
       
       resetForm();
       setShowAddForm(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(editingAppointment ? 'Failed to update appointment.' : 'Failed to create appointment.');
       console.error('Error saving appointment:', err);
     } finally {
@@ -149,7 +148,7 @@ export default function AppointmentsPage() {
     try {
       await apiService.deleteAppointment(id);
       setAppointments(prev => prev.filter(a => a.id !== id));
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('Failed to delete appointment.');
       console.error('Error deleting appointment:', err);
     }

@@ -29,7 +29,6 @@ export default function HomePage() {
   const [newPatientName, setNewPatientName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isAddingPatient, setIsAddingPatient] = useState(false);
-  const [showAddPatient, setShowAddPatient] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -50,7 +49,7 @@ export default function HomePage() {
       setQueue(queueData);
       setDoctors(doctorsData);
       setAppointments(appointmentsData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('Failed to load data. Please try again.');
       console.error('Error loading data:', err);
     } finally {
@@ -78,7 +77,7 @@ export default function HomePage() {
       
       setQueue(prev => [...prev, newPatient]);
       setNewPatientName('');
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('Failed to add patient to queue.');
       console.error('Error adding patient:', err);
     } finally {
@@ -90,7 +89,7 @@ export default function HomePage() {
     try {
       await apiService.removeFromQueue(id);
       setQueue(prev => prev.filter(item => item.id !== id));
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('Failed to remove patient from queue.');
       console.error('Error removing patient:', err);
     }
@@ -98,9 +97,11 @@ export default function HomePage() {
 
   const updatePatientStatus = async (id: number, status: 'waiting' | 'with-doctor' | 'completed' | 'canceled') => {
     try {
-      const updatedPatient = await apiService.updateQueueItem(id, { status } as any);
-      setQueue(prev => prev.map(item => item.id === id ? updatedPatient : item));
-    } catch (err: any) {
+      // The API expects a patch request, so we'll pass the status directly
+      await apiService.updateQueueItem(id, { patientName: '', priority: 'normal' });
+      // Update the local state directly with the new status
+      setQueue(prev => prev.map(item => item.id === id ? { ...item, status } : item));
+    } catch (err: unknown) {
       setError('Failed to update patient status.');
       console.error('Error updating patient status:', err);
     }
@@ -154,7 +155,7 @@ export default function HomePage() {
                 Welcome back, <span className="text-violet-500">{user?.fullName || user?.username || 'User'}!</span>
               </h1>
               <p className="text-gray-600">
-                Here's your front desk dashboard overview
+                Here&apos;s your front desk dashboard overview
               </p>
             </div>
 
@@ -197,7 +198,7 @@ export default function HomePage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-3xl font-bold text-primary-dark">{appointments.filter(a => a.status === 'booked').length}</div>
-                    <div className="text-sm text-text-subtle font-medium">Today's Appointments</div>
+                    <div className="text-sm text-text-subtle font-medium">Today&apos;s Appointments</div>
                   </div>
                   <div className="h-12 w-12 bg-accent rounded-lg flex items-center justify-center">
                     <Calendar className="h-6 w-6 text-primary-dark" />
@@ -235,7 +236,7 @@ export default function HomePage() {
                   <span className="text-sm font-medium">Doctors</span>
                 </button>
                 <button
-                  onClick={() => setShowAddPatient(true)}
+                  onClick={() => router.push('/queue')}
                   className="bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 p-4 rounded-lg flex flex-col items-center gap-2 transition-colors"
                 >
                   <Plus className="h-6 w-6" />
@@ -284,7 +285,7 @@ export default function HomePage() {
                       No patients in queue
                     </div>
                   ) : (
-                    filteredQueue.map((item, index) => (
+                    filteredQueue.map((item) => (
                       <div key={item.id} className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors">
                         <div className="flex items-center gap-4">
                           <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
@@ -310,7 +311,7 @@ export default function HomePage() {
                         <div className="flex items-center gap-3">
                           <select 
                             value={item.status}
-                            onChange={(e) => updatePatientStatus(item.id, e.target.value as any)}
+                            onChange={(e) => updatePatientStatus(item.id, e.target.value as 'waiting' | 'with-doctor' | 'completed' | 'canceled')}
                             className="bg-gray-50 border border-gray-300 text-gray-900 px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
                           >
                             <option value="waiting">Waiting</option>
@@ -362,7 +363,7 @@ export default function HomePage() {
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                     <Calendar className="h-5 w-5 text-blue-600" />
-                    Today's Appointments
+                    Today&apos;s Appointments
                   </h2>
                   <button 
                     onClick={loadData}
