@@ -1,8 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #1a1a1a;
+  --foreground: #ffffff;
+  --card-background: #2d2d2d;
+  --border: #404040;
+  --muted: #9ca3af;
+  --accent: #3b82f6;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
 }
 
 @theme inline {
@@ -12,15 +19,52 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+.card {
+  background: var(--card-background);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.status-waiting {
+  background-color: #fbbf24;
+  color: #92400e;
+}
+
+.status-with-doctor {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.status-completed {
+  background-color: #10b981;
+  color: white;
+}
+
+.status-urgent {
+  background-color: #ef4444;
+  color: white;
+}
+
+.status-available {
+  background-color: #10b981;
+  color: white;
+}
+
+.status-busy {
+  background-color: #f59e0b;
+  color: white;
+}
+
+.status-off-duty {
+  background-color: #ef4444;
+  color: white;
 }
