@@ -1,41 +1,48 @@
 'use client';
 
 import { SWRConfig } from 'swr';
-import { enhancedApiService } from '../services/enhancedApi';
-import { useEffect } from 'react';
+import { memo } from 'react';
+import { ErrorHandler } from '../utils/errorHandler';
 
 interface SWRProviderProps {
   children: React.ReactNode;
 }
 
-export default function SWRProvider({ children }: SWRProviderProps) {
-  // Preload critical data on mount
-  useEffect(() => {
-    enhancedApiService.prefetchData();
-  }, []);
-
+const SWRProvider = memo(({ children }: SWRProviderProps) => {
   return (
     <SWRConfig
       value={{
-        refreshInterval: 0, // Disable automatic refresh by default
+        // Global SWR configuration
         revalidateOnFocus: false,
         revalidateOnReconnect: true,
-        errorRetryCount: 3,
-        errorRetryInterval: 1000,
-        dedupingInterval: 2000,
+        refreshInterval: 0, // Disable automatic refresh to prevent loops
+        errorRetryCount: 2, // Reduce retry count for auth errors
+        errorRetryInterval: 3000, // Increase interval
+        dedupingInterval: 10000, // Increase deduping interval
+        shouldRetryOnError: (error) => {
+          // Don't retry on auth errors to prevent spam
+          if (ErrorHandler.isAuthError(error)) {
+            return false;
+          }
+          return ErrorHandler.shouldRetry(error);
+        },
         onError: (error, key) => {
-          console.error('SWR Error:', error, 'Key:', key);
-          // You could integrate with error reporting service here
+          // Only log non-auth errors to reduce noise
+          if (!ErrorHandler.isAuthError(error)) {
+            ErrorHandler.logError(error, `SWR:${key}`);
+          }
         },
         onSuccess: (data, key) => {
-          // Optional: Log successful requests in development
-          if (process.env.NODE_ENV === 'development') {
-            console.log('SWR Success:', key, data);
-          }
+          // Reset any error states on successful requests
+          console.debug(`SWR Success: ${key}`);
         },
       }}
     >
       {children}
     </SWRConfig>
   );
-}
+});
+
+SWRProvider.displayName = 'SWRProvider';
+
+export default SWRProvider;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../contexts/AuthContext';
 import { LoadingSpinner } from './LoadingSpinner';
@@ -12,12 +12,20 @@ interface ProtectedRouteProps {
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
+  const routerRef = useRef(router);
+  const hasRedirectedRef = useRef(false);
+
+  // Update router ref without causing re-renders
+  routerRef.current = router;
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login');
+    if (!isLoading && !isAuthenticated && !hasRedirectedRef.current) {
+      hasRedirectedRef.current = true;
+      routerRef.current.push('/login');
+    } else if (isAuthenticated) {
+      hasRedirectedRef.current = false;
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading]); // Removed router from dependencies
 
   if (isLoading) {
     return (

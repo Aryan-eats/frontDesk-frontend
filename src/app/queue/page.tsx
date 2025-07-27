@@ -1,17 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LoadingOverlay, LoadingSpinner } from '../../components/LoadingSpinner';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import { useQueue, useDoctors, queueMutations } from '../../hooks/useApi';
 import { validateRequired } from '../../utils/validation';
+import { ErrorHandler } from '../../utils/errorHandler';
 import { 
   Users, 
-  AlertTriangle, 
   Clock, 
   Phone, 
   UserCheck, 
-  X 
+  X,
+  AlertTriangle
 } from 'lucide-react';
 
 export default function QueuePage() {
@@ -28,14 +29,22 @@ export default function QueuePage() {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [updatingStatus, setUpdatingStatus] = useState<number | null>(null); // Track which item is being updated
   const [justUpdated, setJustUpdated] = useState<number | null>(null); // Track recently updated item for visual feedback
+  const [queuePriorities, setQueuePriorities] = useState<Record<number, 'normal' | 'urgent'>>({}); // Store priorities locally
 
   const isLoading = queueLoading || doctorsLoading;
 
-  // Handle errors from SWR
+  // Handle errors from SWR with proper cleanup to prevent loops
   const dataError = queueError || doctorsError;
-  if (dataError) {
-    setError('Failed to load data');
-  }
+  useEffect(() => {
+    if (dataError && !error) {
+      // Use enhanced error message if available
+      const errorDetails = ErrorHandler.createApiError(dataError);
+      setError(errorDetails.userMessage);
+    } else if (!dataError && error) {
+      // Clear error when SWR errors are resolved
+      setError(null);
+    }
+  }, [dataError, error]);
 
   const validateForm = () => {
     const errors: Record<string, string> = {};
@@ -57,12 +66,19 @@ export default function QueuePage() {
       setIsSubmitting(true);
       setError(null);
       
-      await queueMutations.addToQueue({
+      const newQueueItem = await queueMutations.add({
         patientName: patientName.trim(),
         patientPhone: patientPhone.trim() || undefined,
-        doctorId: selectedDoctorId ? parseInt(selectedDoctorId) : undefined,
-        priority
+        doctorId: selectedDoctorId ? parseInt(selectedDoctorId) : undefined
       });
+      
+      // Store priority locally if it's urgent
+      if (priority === 'urgent') {
+        setQueuePriorities(prev => ({
+          ...prev,
+          [newQueueItem.id]: 'urgent'
+        }));
+      }
       
       setPatientName('');
       setPatientPhone('');
@@ -77,33 +93,53 @@ export default function QueuePage() {
     }
   };
 
-  const updateQueueStatus = async (id: number, status: 'waiting' | 'with-doctor' | 'completed' | 'canceled') => {
+  const updateQueueStatus = async (id: number, status: 'waiting' | 'with-doctor' | 'completed') => {
     try {
       setError(null);
       setUpdatingStatus(id); // Set loading state for this specific item
+      
+      console.log(`Attempting to update queue item ${id} to status: ${status}`);
+      
+      // Store the current item state for rollback
+      const currentItem = queue.find(item => item.id === id);
+      if (!currentItem) {
+        throw new Error('Queue item not found');
+      }
       
       await queueMutations.updateStatus(id, status);
       
       // Show success feedback
       setJustUpdated(id);
       setTimeout(() => setJustUpdated(null), 2000); // Clear after 2 seconds
+      
+      console.log(`Successfully updated queue item ${id} to status: ${status}`);
     } catch (err: unknown) {
       console.error('Error updating queue status:', err);
       
       // Provide more specific error messages
       if (err instanceof Error) {
+        console.error('Error details:', err.message);
         if (err.message.includes('401')) {
           setError('Authentication failed. Please log in again.');
         } else if (err.message.includes('404')) {
           setError('Patient not found in queue.');
         } else if (err.message.includes('400')) {
           setError('Invalid status update request.');
+        } else if (err.message.includes('403')) {
+          setError('Permission denied. You are not authorized to update queue status.');
+        } else if (err.message.includes('500')) {
+          setError('Server error. Please try again later.');
+        } else if (err.message.includes('network')) {
+          setError('Network error. Please check your connection.');
         } else {
           setError(`Failed to update status: ${err.message}`);
         }
       } else {
         setError('Failed to update queue status. Please try again.');
       }
+      
+      // Force refresh the queue data to ensure consistency
+      await mutateQueue();
     } finally {
       setUpdatingStatus(null); // Clear loading state
     }
@@ -111,7 +147,13 @@ export default function QueuePage() {
 
   const removeFromQueue = async (id: number) => {
     try {
-      await queueMutations.removeFromQueue(id);
+      await queueMutations.remove(id);
+      // Clean up local priority storage
+      setQueuePriorities(prev => {
+        const updated = { ...prev };
+        delete updated[id];
+        return updated;
+      });
     } catch (err: unknown) {
       setError('Failed to remove patient from queue.');
       console.error('Error removing patient:', err);
@@ -134,7 +176,6 @@ export default function QueuePage() {
       case 'waiting': return 'bg-yellow-500';
       case 'with-doctor': return 'bg-blue-500';
       case 'completed': return 'bg-green-500';
-      case 'canceled': return 'bg-red-500';
       default: return 'bg-gray-500';
     }
   };
@@ -309,8 +350,13 @@ export default function QueuePage() {
                 ) : (
                   queue
                     .sort((a, b) => {
-                      if (a.priority === 'urgent' && b.priority === 'normal') return -1;
-                      if (a.priority === 'normal' && b.priority === 'urgent') return 1;
+                      // Sort by priority first (urgent patients first), then by queue number
+                      const aIsUrgent = queuePriorities[a.id] === 'urgent';
+                      const bIsUrgent = queuePriorities[b.id] === 'urgent';
+                      
+                      if (aIsUrgent && !bIsUrgent) return -1;
+                      if (!aIsUrgent && bIsUrgent) return 1;
+                      
                       return a.queueNumber - b.queueNumber;
                     })
                     .map((item) => (
@@ -322,10 +368,10 @@ export default function QueuePage() {
                             <div className="h-12 w-12 bg-primary-light rounded-full flex items-center justify-center">
                               <span className="text-lg font-bold text-primary-dark">#{item.queueNumber}</span>
                             </div>
-                            {item.priority === 'urgent' && (
-                              <div className="flex items-center gap-1 bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs mt-2">
+                            {queuePriorities[item.id] === 'urgent' && (
+                              <div className="mt-1 px-2 py-1 bg-red-500 text-white text-xs rounded-full flex items-center gap-1">
                                 <AlertTriangle className="h-3 w-3" />
-                                <span>Urgent</span>
+                                Urgent
                               </div>
                             )}
                           </div>
@@ -357,7 +403,7 @@ export default function QueuePage() {
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-shrink-0">
                           <select
                             value={item.status}
-                            onChange={(e) => updateQueueStatus(item.id, e.target.value as 'waiting' | 'with-doctor' | 'completed' | 'canceled')}
+                            onChange={(e) => updateQueueStatus(item.id, e.target.value as 'waiting' | 'with-doctor' | 'completed')}
                             disabled={updatingStatus === item.id}
                             className={`w-full sm:w-auto bg-gray-50 border border-gray-300 text-gray-900 px-3 py-2 rounded-lg focus:ring-2 focus:ring-primary ${
                               updatingStatus === item.id ? 'opacity-50 cursor-not-allowed' : ''
@@ -366,7 +412,6 @@ export default function QueuePage() {
                             <option value="waiting">Waiting</option>
                             <option value="with-doctor">With Doctor</option>
                             <option value="completed">Completed</option>
-                            <option value="canceled">Canceled</option>
                           </select>
                           <div className="flex items-center gap-3 w-full sm:w-auto">
                             {updatingStatus === item.id ? (

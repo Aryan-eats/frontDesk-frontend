@@ -1,16 +1,18 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
 
-const API_BASE_URL = 'https://frontdesk-sigma.vercel.app';
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://frontdesk-sigma.vercel.app' 
+  : 'http://localhost:3000';
+
+const FALLBACK_API_URL = process.env.NEXT_PUBLIC_API_URL || API_BASE_URL;
 
 // Types
 export interface User {
   id: number;
   username: string;
-  email?: string;
-  fullName?: string;
+  fullName: string;
   role: string;
   createdAt: string;
-  updatedAt: string;
 }
 
 export interface Doctor {
@@ -19,26 +21,21 @@ export interface Doctor {
   specialization: string;
   gender: string;
   location: string;
-  email?: string;
   phone?: string;
-  availability?: string;
+  availability?: { day: string; startTime: string; endTime: string }[];
   status: 'available' | 'busy' | 'off-duty';
   createdAt: string;
-  updatedAt: string;
 }
 
 export interface Appointment {
   id: number;
   patientName: string;
-  patientEmail?: string;
   patientPhone?: string;
   appointmentTime: string;
-  status: 'booked' | 'completed' | 'canceled' | 'in-progress';
-  notes?: string;
+  status: 'booked' | 'completed' | 'canceled';
   doctor: Doctor;
   doctorId: number;
   createdAt: string;
-  updatedAt: string;
 }
 
 export interface QueueItem {
@@ -46,13 +43,10 @@ export interface QueueItem {
   patientName: string;
   patientPhone?: string;
   queueNumber: number;
-  status: 'waiting' | 'with-doctor' | 'completed' | 'canceled';
-  priority: 'normal' | 'urgent';
-  estimatedWaitTime?: number;
+  status: 'waiting' | 'with-doctor' | 'completed';
   doctor?: Doctor;
   doctorId?: number;
   arrivalTime: string;
-  updatedAt: string;
 }
 
 export interface AuthResponse {
@@ -68,9 +62,9 @@ export interface LoginRequest {
 export interface SignUpRequest {
   username: string;
   password: string;
-  email?: string;
-  fullName?: string;
-  role?: string;
+  email: string;
+  fullName: string;
+  role: string;
 }
 
 export interface CreateDoctorRequest {
@@ -78,76 +72,142 @@ export interface CreateDoctorRequest {
   specialization: string;
   gender: string;
   location: string;
-  email?: string;
   phone?: string;
-  availability?: string;
+  availability?: { day: string; startTime: string; endTime: string }[];
 }
 
 export interface CreateAppointmentRequest {
   patientName: string;
-  patientEmail?: string;
   patientPhone?: string;
   appointmentTime: string;
   doctorId: number;
-  notes?: string;
 }
 
 export interface CreateQueueRequest {
   patientName: string;
   patientPhone?: string;
   doctorId?: number;
-  priority?: 'normal' | 'urgent';
+}
+
+export interface UpdateQueueRequest {
+  patientName?: string;
+  patientPhone?: string;
+  status?: 'waiting' | 'with-doctor' | 'completed';
 }
 
 class ApiService {
   private api: AxiosInstance;
+  private retryCount = 0;
+  private maxRetries = 3;
+  private isRedirecting = false;
 
   constructor() {
     this.api = axios.create({
-      baseURL: API_BASE_URL,
+      baseURL: FALLBACK_API_URL,
+      timeout: 10000, 
       headers: {
         'Content-Type': 'application/json',
       },
     });
 
-    this.api.interceptors.request.use((config) => {
-      const token = localStorage.getItem('accessToken');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+    this.api.interceptors.request.use(
+      (config) => {
+        return config;
+      },
+      (error) => {
+        console.error('Request interceptor error:', error);
+        return Promise.reject(error);
       }
-      return config;
-    });
+    );
 
     this.api.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('user');
-          window.location.href = '/login';
+      (response) => {
+        this.retryCount = 0; 
+        return response;
+      },
+      (error: AxiosError) => {
+        console.error('API Error:', error.response?.status, error.message);
+        
+        if (error.response?.status === 401 && !this.isRedirecting) {
+          this.isRedirecting = true;
+          
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('user');
+            
+            setTimeout(() => {
+              window.location.href = '/login';
+              this.isRedirecting = false;
+            }, 100);
+          }
         }
+        
         return Promise.reject(error);
       }
     );
   }
 
+  private async retryRequest<T>(request: () => Promise<T>): Promise<T> {
+    try {
+      const result = await request();
+      this.retryCount = 0; 
+      return result;
+    } catch (error) {
+      if (this.retryCount < this.maxRetries && this.shouldRetry(error as AxiosError)) {
+        this.retryCount++;
+        const delay = Math.min(1000 * Math.pow(2, this.retryCount), 10000); 
+        console.log(`Retrying request in ${delay}ms (attempt ${this.retryCount}/${this.maxRetries})`);
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.retryRequest(request);
+      }
+      throw error;
+    }
+  }
+
+  private shouldRetry(error: AxiosError): boolean {
+    if (error.response) {
+      const status = error.response.status;
+      return status >= 500 || status === 429 || status === 408; 
+    }
+    
+    return error.code === 'ECONNABORTED' || error.code === 'ENOTFOUND' || !error.response;
+  }
+
   async login(credentials: LoginRequest): Promise<AuthResponse> {
-    const response: AxiosResponse<AuthResponse> = await this.api.post('/auth/login', credentials);
-    return response.data;
+    return this.retryRequest(async () => {
+      const response: AxiosResponse<AuthResponse> = await this.api.post('/auth/login', credentials);
+      return response.data;
+    });
   }
 
   async signup(userData: SignUpRequest): Promise<AuthResponse> {
-    const response: AxiosResponse<AuthResponse> = await this.api.post('/auth/signup', userData);
-    return response.data;
+    return this.retryRequest(async () => {
+      const response: AxiosResponse<AuthResponse> = await this.api.post('/auth/signup', userData);
+      return response.data;
+    });
   }
 
   async getDoctors(): Promise<Doctor[]> {
-    const response: AxiosResponse<Doctor[]> = await this.api.get('/doctors');
-    return response.data;
+    return this.retryRequest(async () => {
+      const response: AxiosResponse<Doctor[]> = await this.api.get('/doctors');
+      return response.data;
+    });
   }
 
   async getAvailableDoctors(): Promise<Doctor[]> {
-    const response: AxiosResponse<Doctor[]> = await this.api.get('/doctors/available');
+    return this.retryRequest(async () => {
+      const response: AxiosResponse<Doctor[]> = await this.api.get('/doctors/available');
+      return response.data;
+    });
+  }
+
+  async searchDoctors(specialization?: string, location?: string): Promise<Doctor[]> {
+    const params: any = {};
+    if (specialization) params.specialization = specialization;
+    if (location) params.location = location;
+    
+    const response: AxiosResponse<Doctor[]> = await this.api.get('/doctors', { params });
     return response.data;
   }
 
@@ -166,48 +226,56 @@ class ApiService {
     return response.data;
   }
 
-  async updateDoctorStatus(id: number, status: 'available' | 'busy' | 'off-duty'): Promise<Doctor> {
-    const response: AxiosResponse<Doctor> = await this.api.patch(`/doctors/${id}/status`, { status });
-    return response.data;
-  }
-
   async deleteDoctor(id: number): Promise<void> {
     await this.api.delete(`/doctors/${id}`);
   }
 
-  async getAppointments(params?: { doctorId?: number; startDate?: string; endDate?: string }): Promise<Appointment[]> {
-    const response: AxiosResponse<Appointment[]> = await this.api.get('/appointments', { params });
-    return response.data;
+  async getAppointments(): Promise<Appointment[]> {
+    return this.retryRequest(async () => {
+      const response: AxiosResponse<Appointment[]> = await this.api.get('/appointments');
+      return response.data;
+    });
   }
 
-  async getAppointment(id: number): Promise<Appointment> {
-    const response: AxiosResponse<Appointment> = await this.api.get(`/appointments/${id}`);
-    return response.data;
+  async getTodayAppointments(): Promise<Appointment[]> {
+    return this.retryRequest(async () => {
+      const response: AxiosResponse<Appointment[]> = await this.api.get('/appointments/today');
+      return response.data;
+    });
   }
 
   async createAppointment(appointment: CreateAppointmentRequest): Promise<Appointment> {
-    const response: AxiosResponse<Appointment> = await this.api.post('/appointments', appointment);
-    return response.data;
+    return this.retryRequest(async () => {
+      const response: AxiosResponse<Appointment> = await this.api.post('/appointments', appointment);
+      return response.data;
+    });
   }
 
   async updateAppointment(id: number, appointment: Partial<CreateAppointmentRequest>): Promise<Appointment> {
-    const response: AxiosResponse<Appointment> = await this.api.patch(`/appointments/${id}`, appointment);
-    return response.data;
+    return this.retryRequest(async () => {
+      const response: AxiosResponse<Appointment> = await this.api.patch(`/appointments/${id}`, appointment);
+      return response.data;
+    });
   }
 
   async deleteAppointment(id: number): Promise<void> {
-    await this.api.delete(`/appointments/${id}`);
+    return this.retryRequest(async () => {
+      await this.api.delete(`/appointments/${id}`);
+    });
   }
 
-  async getQueue(doctorId?: number): Promise<QueueItem[]> {
-    const params = doctorId ? { doctorId } : {};
-    const response: AxiosResponse<QueueItem[]> = await this.api.get('/queue', { params });
-    return response.data;
+  async getQueue(): Promise<QueueItem[]> {
+    return this.retryRequest(async () => {
+      const response: AxiosResponse<QueueItem[]> = await this.api.get('/queue');
+      return response.data;
+    });
   }
 
-  async getWaitingQueue(): Promise<QueueItem[]> {
-    const response: AxiosResponse<QueueItem[]> = await this.api.get('/queue/waiting');
-    return response.data;
+  async getTodayQueue(): Promise<QueueItem[]> {
+    return this.retryRequest(async () => {
+      const response: AxiosResponse<QueueItem[]> = await this.api.get('/queue/today');
+      return response.data;
+    });
   }
 
   async addToQueue(queueItem: CreateQueueRequest): Promise<QueueItem> {
@@ -215,28 +283,32 @@ class ApiService {
     return response.data;
   }
 
-  async updateQueueItem(id: number, queueItem: Partial<CreateQueueRequest>): Promise<QueueItem> {
+  async updateQueueItem(id: number, queueItem: UpdateQueueRequest): Promise<QueueItem> {
     const response: AxiosResponse<QueueItem> = await this.api.patch(`/queue/${id}`, queueItem);
-    return response.data;
-  }
-
-  async updateQueueStatus(id: number, status: 'waiting' | 'with-doctor' | 'completed' | 'canceled'): Promise<QueueItem> {
-    const response: AxiosResponse<QueueItem> = await this.api.patch(`/queue/${id}/status`, { status });
-    return response.data;
-  }
-
-  async callNextPatient(doctorId?: number): Promise<QueueItem | null> {
-    const response: AxiosResponse<QueueItem | null> = await this.api.post('/queue/call-next', { doctorId });
-    return response.data;
-  }
-
-  async completePatient(id: number): Promise<QueueItem> {
-    const response: AxiosResponse<QueueItem> = await this.api.patch(`/queue/${id}/complete`);
     return response.data;
   }
 
   async removeFromQueue(id: number): Promise<void> {
     await this.api.delete(`/queue/${id}`);
+  }
+
+  async testConnection(): Promise<boolean> {
+    try {
+      const response = await this.api.get('/health', {
+        timeout: 5000
+      });
+      return response.status === 200;
+    } catch (error) {
+      console.warn('Connection test failed:', error);
+      return false;
+    }
+  }
+
+  async checkHealth(): Promise<{ status: string; timestamp: string }> {
+    return this.retryRequest(async () => {
+      const response = await this.api.get('/health');
+      return response.data;
+    });
   }
 }
 

@@ -58,21 +58,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = memo(({ children }) => 
   const isAuthenticated = useMemo(() => !!user, [user]);
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    const userData = localStorage.getItem('user');
-    
-    if (token && userData) {
+    const initializeAuth = () => {
       try {
-        const parsedUser = JSON.parse(userData);
-        setUser(parsedUser);
-      } catch {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('user');
+        // SSR check - ensure we're in browser environment
+        if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+          setIsLoading(false);
+          return;
+        }
+        
+        // Only require user in localStorage for authentication
+        const userData = localStorage.getItem('user');
+        if (userData) {
+          try {
+            const parsedUser = JSON.parse(userData);
+            setUser(parsedUser);
+          } catch (error) {
+            console.error('Failed to parse user data:', error);
+            localStorage.removeItem('user');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to initialize auth:', error);
+      } finally {
+        setIsLoading(false);
       }
-    }
-    
-    setIsLoading(false);
-  }, []);
+    };
+
+    // Initialize auth immediately without delay
+    initializeAuth();
+  }, []); // Empty dependency array to prevent infinite loops
 
   // Memoize action functions to prevent unnecessary re-renders
   const login = useCallback(async (credentials: LoginRequest): Promise<void> => {

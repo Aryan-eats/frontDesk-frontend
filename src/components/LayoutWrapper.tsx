@@ -14,8 +14,8 @@ const LayoutWrapper = memo<{ children: React.ReactNode }>(({ children }) => {
 
   // Memoize event handlers
   const handleMenuClick = useCallback(() => {
-    setSidebarOpen(!sidebarOpen);
-  }, [sidebarOpen]);
+    setSidebarOpen(prev => !prev);
+  }, []);
 
   const handleSidebarClose = useCallback(() => {
     setSidebarOpen(false);

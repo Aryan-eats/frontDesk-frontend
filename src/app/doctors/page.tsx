@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { LoadingOverlay, LoadingSpinner } from '../../components/LoadingSpinner';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import { Doctor, CreateDoctorRequest } from '../../services/api';
@@ -8,7 +8,6 @@ import { useDoctors, doctorMutations } from '../../hooks/useApi';
 import { validateRequired, validateEmail } from '../../utils/validation';
 import { 
   X, 
-  Mail, 
   Phone, 
   Plus,
   Edit,
@@ -19,7 +18,6 @@ export default function DoctorsPage() {
   // Use SWR hooks for data fetching with shared cache
   const { data: doctors = [], error: doctorsError, isLoading: doctorsLoading } = useDoctors();
   
-  const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
   const [filter, setFilter] = useState({ 
     specialization: '', 
     location: '', 
@@ -30,25 +28,10 @@ export default function DoctorsPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
 
-  // Form state
-  const [formData, setFormData] = useState<CreateDoctorRequest>({
-    name: '',
-    specialization: '',
-    gender: '',
-    location: '',
-    email: '',
-    phone: '',
-    availability: ''
-  });
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-
-  // Handle errors from SWR
-  if (doctorsError && !error) {
-    setError('Failed to load doctors');
-  }
-
-  // Filter doctors based on filter criteria
-  const filterDoctors = useCallback(() => {
+  // Memoize filtered doctors instead of using state
+  const filteredDoctors = useMemo(() => {
+    if (!doctors || doctors.length === 0) return [];
+    
     let filtered = doctors;
     
     if (filter.specialization) {
@@ -67,12 +50,26 @@ export default function DoctorsPage() {
       filtered = filtered.filter(d => d.status === filter.status);
     }
     
-    setFilteredDoctors(filtered);
-  }, [doctors, filter]);
+    return filtered;
+  }, [doctors, filter.specialization, filter.location, filter.status]);
 
+  // Form state
+  const [formData, setFormData] = useState<CreateDoctorRequest>({
+    name: '',
+    specialization: '',
+    gender: '',
+    location: '',
+    phone: '',
+    availability: []
+  });
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  // Handle errors from SWR
   useEffect(() => {
-    filterDoctors();
-  }, [filterDoctors]);
+    if (doctorsError && !error) {
+      setError('Failed to load doctors');
+    }
+  }, [doctorsError, error]);
 
   const validateForm = () => {
     const errors: Record<string, string> = {};
@@ -91,10 +88,6 @@ export default function DoctorsPage() {
     
     if (!validateRequired(formData.location)) {
       errors.location = 'Location required';
-    }
-    
-    if (formData.email && !validateEmail(formData.email)) {
-      errors.email = 'Invalid email format';
     }
     
     setValidationErrors(errors);
@@ -133,9 +126,8 @@ export default function DoctorsPage() {
       specialization: doctor.specialization,
       gender: doctor.gender,
       location: doctor.location,
-      email: doctor.email || '',
       phone: doctor.phone || '',
-      availability: doctor.availability || ''
+      availability: doctor.availability || []
     });
     setEditingDoctor(doctor);
     setShowAddForm(true);
@@ -155,7 +147,7 @@ export default function DoctorsPage() {
 
   const updateDoctorStatus = async (id: number, status: 'available' | 'busy' | 'off-duty') => {
     try {
-      await doctorMutations.updateStatus(id, status);
+      await doctorMutations.update(id, { status });
     } catch (err: unknown) {
       setError('Failed to update doctor status.');
       console.error('Error updating doctor status:', err);
@@ -168,9 +160,8 @@ export default function DoctorsPage() {
       specialization: '',
       gender: '',
       location: '',
-      email: '',
       phone: '',
-      availability: ''
+      availability: []
     });
     setValidationErrors({});
     setEditingDoctor(null);
@@ -376,25 +367,6 @@ export default function DoctorsPage() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Email
-                      </label>
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                        className={`w-full bg-white text-gray-900 px-4 py-3 rounded border ${
-                          validationErrors.email ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-violet-500 focus:border-violet-500'
-                        }`}
-                        placeholder="Enter email address"
-                        disabled={isSubmitting}
-                      />
-                      {validationErrors.email && (
-                        <p className="text-red-500 text-sm mt-1">{validationErrors.email}</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         Phone
                       </label>
                       <input
@@ -406,20 +378,6 @@ export default function DoctorsPage() {
                         disabled={isSubmitting}
                       />
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Availability
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.availability}
-                      onChange={(e) => setFormData(prev => ({ ...prev, availability: e.target.value }))}
-                      className="w-full bg-white text-gray-900 px-4 py-3 rounded border border-gray-300 focus:ring-violet-500 focus:border-violet-500"
-                      placeholder="e.g., Mon-Fri 9AM-5PM"
-                      disabled={isSubmitting}
-                    />
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-4">
@@ -473,12 +431,6 @@ export default function DoctorsPage() {
                             <div className="text-sm text-gray-600">
                               {doctor.location} • {doctor.gender}
                             </div>
-                            {doctor.email && (
-                              <div className="text-sm text-gray-600 flex items-center gap-1">
-                                <Mail className="h-4 w-4" />
-                                {doctor.email}
-                              </div>
-                            )}
                             {doctor.phone && (
                               <div className="text-sm text-gray-600 flex items-center gap-1">
                                 <Phone className="h-4 w-4" />

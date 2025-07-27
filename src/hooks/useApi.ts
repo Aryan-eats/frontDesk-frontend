@@ -1,22 +1,59 @@
 import useSWR, { SWRConfiguration, mutate } from 'swr';
-import { enhancedApiService } from '../services/enhancedApi';
-import { Doctor, Appointment, QueueItem, CreateDoctorRequest, CreateAppointmentRequest, CreateQueueRequest } from '../services/api';
+import { apiService } from '../services/api';
+import { Doctor, Appointment, QueueItem, CreateDoctorRequest, CreateAppointmentRequest, CreateQueueRequest, UpdateQueueRequest } from '../services/api';
 
-// Default SWR configuration
+// Get auth status for conditional fetching - SSR safe
+const getAuthToken = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return localStorage.getItem('accessToken');
+  } catch {
+    return null;
+  }
+};
+
+// Check if we're authenticated - SSR safe
+const isAuthenticated = () => {
+  if (typeof window === 'undefined') return false;
+  return !!getAuthToken();
+};
+
+// Default SWR configuration with better stability
 const defaultConfig: SWRConfiguration = {
   revalidateOnFocus: false,
   revalidateOnReconnect: true,
-  refreshInterval: 0, // Disable automatic refresh by default
-  errorRetryCount: 3,
-  errorRetryInterval: 1000,
-  dedupingInterval: 2000,
+  refreshInterval: 0, // Disable automatic refresh to prevent infinite loops
+  errorRetryCount: 2, // Reduce retries for faster failure feedback
+  errorRetryInterval: 3000, // 3 second delay between retries
+  dedupingInterval: 10000, // 10 second deduping to prevent rapid fire requests
+  revalidateIfStale: true,
+  revalidateOnMount: true,
+  shouldRetryOnError: (error) => {
+    // Don't retry auth errors
+    if (error?.response?.status === 401) return false;
+    if (error?.response?.status === 403) return false;
+    return true;
+  },
+  onError: (error) => {
+    // Only log non-auth errors to reduce console noise
+    if (error?.response?.status !== 401 && error?.response?.status !== 403) {
+      console.error('SWR Error:', error);
+    }
+  }
+};
+
+// Stable configuration for real-time data with longer intervals
+const realTimeConfig: SWRConfiguration = {
+  ...defaultConfig,
+  refreshInterval: 0, // Disable auto-refresh completely to prevent issues
+  dedupingInterval: 15000, // 15 second deduping for real-time data
 };
 
 // Custom hook for doctors data
 export const useDoctors = (config?: SWRConfiguration) => {
   return useSWR<Doctor[]>(
-    'doctors',
-    () => enhancedApiService.getDoctors(),
+    isAuthenticated() ? 'doctors' : null, // Only fetch if authenticated
+    isAuthenticated() ? () => apiService.getDoctors() : null,
     { ...defaultConfig, ...config }
   );
 };
@@ -24,8 +61,8 @@ export const useDoctors = (config?: SWRConfiguration) => {
 // Custom hook for available doctors
 export const useAvailableDoctors = (config?: SWRConfiguration) => {
   return useSWR<Doctor[]>(
-    'doctors/available',
-    () => enhancedApiService.getAvailableDoctors(),
+    isAuthenticated() ? 'doctors/available' : null,
+    isAuthenticated() ? () => apiService.getAvailableDoctors() : null,
     { ...defaultConfig, ...config }
   );
 };
@@ -33,303 +70,131 @@ export const useAvailableDoctors = (config?: SWRConfiguration) => {
 // Custom hook for single doctor
 export const useDoctor = (id: number | null, config?: SWRConfiguration) => {
   return useSWR<Doctor>(
-    id ? `doctors/${id}` : null,
-    id ? () => enhancedApiService.getDoctor(id) : null,
+    isAuthenticated() && id ? `doctors/${id}` : null,
+    isAuthenticated() && id ? () => apiService.getDoctor(id) : null,
     { ...defaultConfig, ...config }
   );
 };
 
 // Custom hook for appointments
-export const useAppointments = (
-  params?: { doctorId?: number; startDate?: string; endDate?: string },
-  config?: SWRConfiguration
-) => {
-  const key = params ? ['appointments', params] : 'appointments';
+export const useAppointments = (config?: SWRConfiguration) => {
   return useSWR<Appointment[]>(
-    key,
-    () => enhancedApiService.getAppointments(params),
+    isAuthenticated() ? 'appointments' : null,
+    isAuthenticated() ? () => apiService.getAppointments() : null,
     { ...defaultConfig, ...config }
   );
 };
 
+// Custom hook for today's appointments
+export const useTodayAppointments = (config?: SWRConfiguration) => {
+  return useSWR<Appointment[]>(
+    isAuthenticated() ? 'appointments/today' : null,
+    isAuthenticated() ? () => apiService.getTodayAppointments() : null,
+    { ...realTimeConfig, ...config }
+  );
+};
+
 // Custom hook for queue data
-export const useQueue = (doctorId?: number, config?: SWRConfiguration) => {
-  const key = doctorId ? ['queue', doctorId] : 'queue';
+export const useQueue = (config?: SWRConfiguration) => {
   return useSWR<QueueItem[]>(
-    key,
-    () => enhancedApiService.getQueue(doctorId),
+    isAuthenticated() ? 'queue' : null,
+    isAuthenticated() ? () => apiService.getQueue() : null,
     { 
-      ...defaultConfig, 
-      refreshInterval: 30000, // Refresh every 30 seconds for queue
+      ...realTimeConfig,
       ...config 
     }
   );
 };
 
-// Custom hook for waiting queue
-export const useWaitingQueue = (config?: SWRConfiguration) => {
+// Custom hook for today's queue
+export const useTodayQueue = (config?: SWRConfiguration) => {
   return useSWR<QueueItem[]>(
-    'queue/waiting',
-    () => enhancedApiService.getWaitingQueue(),
+    isAuthenticated() ? 'queue/today' : null,
+    isAuthenticated() ? () => apiService.getTodayQueue() : null,
     { 
-      ...defaultConfig, 
-      refreshInterval: 15000, // Refresh every 15 seconds for waiting queue
+      ...realTimeConfig,
       ...config 
     }
   );
 };
 
-// Mutation helpers with optimistic updates
+// Mutation helpers with debouncing and better error handling
 export const doctorMutations = {
-  updateStatus: async (id: number, status: 'available' | 'busy' | 'off-duty') => {
-    // Optimistic update
-    await mutate(`doctors/${id}`, 
-      (currentDoctor: Doctor | undefined) => 
-        currentDoctor ? { ...currentDoctor, status } : undefined,
-      false
-    );
-    
-    // Also update the doctors list
-    await mutate('doctors', 
-      (currentDoctors: Doctor[] | undefined) => 
-        currentDoctors?.map(doctor => 
-          doctor.id === id ? { ...doctor, status } : doctor
-        ),
-      false
-    );
-    
-    // Update available doctors list
-    await mutate('doctors/available');
-    
-    try {
-      const result = await enhancedApiService.updateDoctorStatusOptimistic(id, status);
-      
-      // Revalidate all related data
-      await Promise.all([
-        mutate(`doctors/${id}`),
-        mutate('doctors'),
-        mutate('doctors/available'),
-      ]);
-      
-      return result;
-    } catch (error) {
-      // Revert on error
-      await Promise.all([
-        mutate(`doctors/${id}`),
-        mutate('doctors'),
-        mutate('doctors/available'),
-      ]);
-      throw error;
-    }
-  },
-  
   create: async (doctorData: CreateDoctorRequest) => {
     try {
-      const result = await enhancedApiService.createDoctor(doctorData);
-      
-      // Revalidate doctors data
-      await Promise.all([
-        mutate('doctors'),
-        mutate('doctors/available'),
-      ]);
-      
+      const result = await apiService.createDoctor(doctorData);
+      // Stagger mutations to prevent race conditions
+      await mutate('doctors');
+      setTimeout(() => mutate('doctors/available'), 100);
       return result;
     } catch (error) {
+      console.error('Failed to create doctor:', error);
       throw error;
     }
   },
   
   update: async (id: number, doctorData: Partial<Doctor>) => {
-    // Optimistic update
-    await mutate('doctors', 
-      (currentDoctors: Doctor[] | undefined) => 
-        currentDoctors?.map(doctor => 
-          doctor.id === id ? { ...doctor, ...doctorData } : doctor
-        ),
-      false
-    );
-    
     try {
-      const result = await enhancedApiService.updateDoctor(id, doctorData);
-      
-      // Revalidate doctors data
-      await Promise.all([
-        mutate('doctors'),
-        mutate('doctors/available'),
-      ]);
-      
+      const result = await apiService.updateDoctor(id, doctorData);
+      // Stagger mutations to prevent race conditions
+      await mutate(`doctors/${id}`);
+      setTimeout(() => mutate('doctors'), 100);
+      setTimeout(() => mutate('doctors/available'), 200);
       return result;
     } catch (error) {
-      // Revert on error
-      await Promise.all([
-        mutate('doctors'),
-        mutate('doctors/available'),
-      ]);
+      console.error('Failed to update doctor:', error);
       throw error;
     }
   },
   
   delete: async (id: number) => {
-    // Optimistic update
-    await mutate('doctors', 
-      (currentDoctors: Doctor[] | undefined) => 
-        currentDoctors?.filter(doctor => doctor.id !== id),
-      false
-    );
-    
-    await mutate('doctors/available', 
-      (currentDoctors: Doctor[] | undefined) => 
-        currentDoctors?.filter(doctor => doctor.id !== id),
-      false
-    );
-    
     try {
-      await enhancedApiService.deleteDoctor(id);
-      
-      // Revalidate doctors data
-      await Promise.all([
-        mutate('doctors'),
-        mutate('doctors/available'),
-      ]);
+      await apiService.deleteDoctor(id);
+      // Stagger mutations to prevent race conditions
+      await mutate('doctors');
+      setTimeout(() => mutate('doctors/available'), 100);
     } catch (error) {
-      // Revert on error
-      await Promise.all([
-        mutate('doctors'),
-        mutate('doctors/available'),
-      ]);
+      console.error('Failed to delete doctor:', error);
       throw error;
     }
   },
 };
 
 export const queueMutations = {
-  completePatient: async (id: number) => {
-    // Optimistic update - remove from waiting queue
-    await mutate('queue/waiting', 
-      (currentQueue: QueueItem[] | undefined) => 
-        currentQueue?.filter(item => item.id !== id),
-      false
-    );
-    
-    // Update general queue
-    await mutate('queue', 
-      (currentQueue: QueueItem[] | undefined) => 
-        currentQueue?.map(item => 
-          item.id === id ? { ...item, status: 'completed' as const } : item
-        ),
-      false
-    );
-    
+  add: async (queueItem: CreateQueueRequest) => {
     try {
-      // Use the enhanced status update method
-      const result = await enhancedApiService.updateQueueStatus(id, 'completed');
-      
-      // Revalidate queue data
-      await Promise.all([
-        mutate('queue'),
-        mutate('queue/waiting'),
-      ]);
-      
+      const result = await apiService.addToQueue(queueItem);
+      // Stagger mutations to prevent race conditions
+      await mutate('queue/today');
+      setTimeout(() => mutate('queue'), 100);
       return result;
     } catch (error) {
-      // Revert on error
-      await Promise.all([
-        mutate('queue'),
-        mutate('queue/waiting'),
-      ]);
+      console.error('Failed to add to queue:', error);
       throw error;
     }
   },
   
-  updateStatus: async (id: number, status: 'waiting' | 'with-doctor' | 'completed' | 'canceled') => {
-    // Optimistic update
-    await mutate('queue', 
-      (currentQueue: QueueItem[] | undefined) => 
-        currentQueue?.map(item => 
-          item.id === id ? { ...item, status } : item
-        ),
-      false
-    );
-    
-    // Update waiting queue if relevant
-    if (status === 'completed' || status === 'canceled') {
-      await mutate('queue/waiting', 
-        (currentQueue: QueueItem[] | undefined) => 
-          currentQueue?.filter(item => item.id !== id),
-        false
-      );
-    } else if (status === 'waiting') {
-      // Add back to waiting queue if status changed to waiting
-      await mutate('queue/waiting');
-    }
-    
+  updateStatus: async (id: number, status: 'waiting' | 'with-doctor' | 'completed') => {
     try {
-      // Use the enhanced status update method
-      const result = await enhancedApiService.updateQueueStatus(id, status);
-      
-      // Revalidate queue data
-      await Promise.all([
-        mutate('queue'),
-        mutate('queue/waiting'),
-      ]);
-      
+      const result = await apiService.updateQueueItem(id, { status });
+      // Stagger mutations to prevent race conditions
+      await mutate('queue/today');
+      setTimeout(() => mutate('queue'), 100);
       return result;
     } catch (error) {
-      console.error('All status update approaches failed:', error);
-      
-      // Revert optimistic update
-      await Promise.all([
-        mutate('queue'),
-        mutate('queue/waiting'),
-      ]);
+      console.error('Failed to update queue status:', error);
       throw error;
     }
   },
   
-  addToQueue: async (queueItem: CreateQueueRequest) => {
+  remove: async (id: number) => {
     try {
-      const result = await enhancedApiService.addToQueueOptimistic(queueItem);
-      
-      // Revalidate queue data
-      await Promise.all([
-        mutate('queue'),
-        mutate('queue/waiting'),
-      ]);
-      
-      return result;
+      await apiService.removeFromQueue(id);
+      // Stagger mutations to prevent race conditions
+      await mutate('queue/today');
+      setTimeout(() => mutate('queue'), 100);
     } catch (error) {
-      throw error;
-    }
-  },
-  
-  removeFromQueue: async (id: number) => {
-    // Optimistic update
-    await mutate('queue/waiting', 
-      (currentQueue: QueueItem[] | undefined) => 
-        currentQueue?.filter(item => item.id !== id),
-      false
-    );
-    
-    await mutate('queue', 
-      (currentQueue: QueueItem[] | undefined) => 
-        currentQueue?.filter(item => item.id !== id),
-      false
-    );
-    
-    try {
-      await enhancedApiService.removeFromQueue(id);
-      
-      // Revalidate queue data
-      await Promise.all([
-        mutate('queue'),
-        mutate('queue/waiting'),
-      ]);
-    } catch (error) {
-      // Revert on error
-      await Promise.all([
-        mutate('queue'),
-        mutate('queue/waiting'),
-      ]);
+      console.error('Failed to remove from queue:', error);
       throw error;
     }
   },
@@ -338,73 +203,39 @@ export const queueMutations = {
 export const appointmentMutations = {
   create: async (appointmentData: CreateAppointmentRequest) => {
     try {
-      const result = await enhancedApiService.createAppointment(appointmentData);
-      
-      // Revalidate appointments data
-      await mutate('appointments');
-      
+      const result = await apiService.createAppointment(appointmentData);
+      // Stagger mutations to prevent race conditions
+      await mutate('appointments/today');
+      setTimeout(() => mutate('appointments'), 100);
       return result;
     } catch (error) {
+      console.error('Failed to create appointment:', error);
       throw error;
     }
   },
   
   update: async (id: number, appointmentData: Partial<Appointment>) => {
-    // Optimistic update
-    await mutate('appointments', 
-      (currentAppointments: Appointment[] | undefined) => 
-        currentAppointments?.map(appointment => 
-          appointment.id === id ? { ...appointment, ...appointmentData } : appointment
-        ),
-      false
-    );
-    
     try {
-      const result = await enhancedApiService.updateAppointment(id, appointmentData);
-      
-      // Revalidate appointments data
-      await mutate('appointments');
-      
+      const result = await apiService.updateAppointment(id, appointmentData);
+      // Stagger mutations to prevent race conditions
+      await mutate('appointments/today');
+      setTimeout(() => mutate('appointments'), 100);
       return result;
     } catch (error) {
-      // Revert on error
-      await mutate('appointments');
+      console.error('Failed to update appointment:', error);
       throw error;
     }
   },
   
   delete: async (id: number) => {
-    // Optimistic update
-    await mutate('appointments', 
-      (currentAppointments: Appointment[] | undefined) => 
-        currentAppointments?.filter(appointment => appointment.id !== id),
-      false
-    );
-    
     try {
-      await enhancedApiService.deleteAppointment(id);
-      
-      // Revalidate appointments data
-      await mutate('appointments');
+      await apiService.deleteAppointment(id);
+      // Stagger mutations to prevent race conditions
+      await mutate('appointments/today');
+      setTimeout(() => mutate('appointments'), 100);
     } catch (error) {
-      // Revert on error
-      await mutate('appointments');
+      console.error('Failed to delete appointment:', error);
       throw error;
     }
   },
-};
-
-// Preload critical data
-export const preloadCriticalData = () => {
-  // Preload doctors and queue data
-  mutate('doctors', enhancedApiService.getDoctors());
-  mutate('doctors/available', enhancedApiService.getAvailableDoctors());
-  mutate('queue/waiting', enhancedApiService.getWaitingQueue());
-};
-
-// Clear all cached data
-export const clearAllCache = () => {
-  enhancedApiService.clearCache();
-  // Clear SWR cache as well
-  mutate(() => true, undefined, { revalidate: false });
 };

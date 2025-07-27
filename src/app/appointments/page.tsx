@@ -9,7 +9,6 @@ import { validateRequired, validateEmail } from '../../utils/validation';
 import { 
   X, 
   Calendar, 
-  Mail, 
   Phone, 
   Plus,
   Edit,
@@ -36,11 +35,9 @@ export default function AppointmentsPage() {
   // Form state
   const [formData, setFormData] = useState<CreateAppointmentRequest>({
     patientName: '',
-    patientEmail: '',
     patientPhone: '',
     appointmentTime: '',
-    doctorId: 0,
-    notes: ''
+    doctorId: 0
   });
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
@@ -65,10 +62,6 @@ export default function AppointmentsPage() {
     
     if (!validateRequired(formData.appointmentTime)) {
       errors.appointmentTime = 'Appointment time required';
-    }
-    
-    if (formData.patientEmail && !validateEmail(formData.patientEmail)) {
-      errors.patientEmail = 'Invalid email format';
     }
     
     // Check if appointment time is in the future
@@ -113,11 +106,9 @@ export default function AppointmentsPage() {
   const handleEdit = (appointment: Appointment) => {
     setFormData({
       patientName: appointment.patientName,
-      patientEmail: appointment.patientEmail || '',
       patientPhone: appointment.patientPhone || '',
       appointmentTime: appointment.appointmentTime.slice(0, 16), // Format for datetime-local input
-      doctorId: appointment.doctorId,
-      notes: appointment.notes || ''
+      doctorId: appointment.doctorId
     });
     setEditingAppointment(appointment);
     setShowAddForm(true);
@@ -138,11 +129,9 @@ export default function AppointmentsPage() {
   const resetForm = () => {
     setFormData({
       patientName: '',
-      patientEmail: '',
       patientPhone: '',
       appointmentTime: '',
-      doctorId: 0,
-      notes: ''
+      doctorId: 0
     });
     setValidationErrors({});
     setEditingAppointment(null);
@@ -348,25 +337,6 @@ export default function AppointmentsPage() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Patient Email
-                      </label>
-                      <input
-                        type="email"
-                        value={formData.patientEmail}
-                        onChange={(e) => setFormData(prev => ({ ...prev, patientEmail: e.target.value }))}
-                        className={`w-full bg-white text-gray-900 px-3 py-2 rounded border ${
-                          validationErrors.patientEmail ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-violet-500 focus:border-violet-500'
-                        }`}
-                        placeholder="Enter patient email"
-                        disabled={isSubmitting}
-                      />
-                      {validationErrors.patientEmail && (
-                        <p className="text-red-500 text-sm mt-1">{validationErrors.patientEmail}</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         Patient Phone
                       </label>
                       <input
@@ -375,20 +345,6 @@ export default function AppointmentsPage() {
                         onChange={(e) => setFormData(prev => ({ ...prev, patientPhone: e.target.value }))}
                         className="w-full bg-white text-gray-900 px-3 py-2 rounded border border-gray-300 focus:ring-violet-500 focus:border-violet-500"
                         placeholder="Enter patient phone"
-                        disabled={isSubmitting}
-                      />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Notes
-                      </label>
-                      <textarea
-                        value={formData.notes}
-                        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                        className="w-full bg-white text-gray-900 px-3 py-2 rounded border border-gray-300 focus:ring-violet-500 focus:border-violet-500"
-                        placeholder="Enter appointment notes"
-                        rows={3}
                         disabled={isSubmitting}
                       />
                     </div>
@@ -443,12 +399,6 @@ export default function AppointmentsPage() {
                                   <Clock className="h-4 w-4" />
                                   {formatDateTime(appointment.appointmentTime)}
                                 </div>
-                                {appointment.patientEmail && (
-                                  <div className="text-sm text-gray-600 flex items-center gap-1">
-                                    <Mail className="h-4 w-4" />
-                                    {appointment.patientEmail}
-                                  </div>
-                                )}
                                 {appointment.patientPhone && (
                                   <div className="text-sm text-gray-600 flex items-center gap-1">
                                     <Phone className="h-4 w-4" />
@@ -460,13 +410,6 @@ export default function AppointmentsPage() {
                                 <div className="font-medium text-gray-900">{appointment.doctor.name}</div>
                                 <div className="text-sm text-violet-600 font-medium">{appointment.doctor.specialization}</div>
                                 <div className="text-sm text-gray-600">{appointment.doctor.location}</div>
-                              </div>
-                              <div>
-                                {appointment.notes && (
-                                  <div className="text-sm text-gray-600">
-                                    <span className="font-medium">Notes:</span> {appointment.notes}
-                                  </div>
-                                )}
                               </div>
                             </div>
                           </div>

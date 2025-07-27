@@ -21,11 +21,22 @@ export default function LoginPage() {
   const router = useRouter();
   const { login, signup, isLoading, error, clearError, isAuthenticated } = useAuth();
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated - with protection against loops
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    
     if (isAuthenticated) {
-      router.push('/');
+      // Use a small delay to prevent race conditions
+      timeoutId = setTimeout(() => {
+        router.push('/');
+      }, 100);
     }
+    
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [isAuthenticated, router]);
 
   // Handle form switch
