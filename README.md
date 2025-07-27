@@ -26,6 +26,11 @@ npm run build
 npm start
 ```
 
+
+## Login Credentials
+username - admin
+password - admin123
+
 ## Tech Stack
 
 - Next.js 15 with App Router
